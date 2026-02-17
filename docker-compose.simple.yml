@@ -1,0 +1,15 @@
+services:
+  embytok:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: embytok:local
+    container_name: embytok-web
+    restart: unless-stopped
+    ports:
+      - "5176:5176"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "5176"
+      SERVE_WEB: "true"
+      WEB_ROOT: "/app/dist"

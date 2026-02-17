@@ -403,6 +403,7 @@ const streamVideo = async (record, req, res) => {
   const totalSize = stat.size;
   const contentType = MIME_BY_EXT[record.ext] || 'application/octet-stream';
   const range = req.headers.range;
+  const sendBody = req.method !== 'HEAD';
 
   if (!range) {
     res.writeHead(200, {
@@ -411,6 +412,10 @@ const streamVideo = async (record, req, res) => {
       'Accept-Ranges': 'bytes',
       'Access-Control-Allow-Origin': '*',
     });
+    if (!sendBody) {
+      res.end();
+      return;
+    }
     fs.createReadStream(record.absPath).pipe(res);
     return;
   }
@@ -440,6 +445,10 @@ const streamVideo = async (record, req, res) => {
     'Access-Control-Allow-Origin': '*',
   });
 
+  if (!sendBody) {
+    res.end();
+    return;
+  }
   fs.createReadStream(record.absPath, { start, end }).pipe(res);
 };
 
@@ -746,7 +755,7 @@ const handleFolderApi = async (req, res, urlObj) => {
     return true;
   }
 
-  if (urlObj.pathname.startsWith('/api/folder/stream/') && req.method === 'GET') {
+  if (urlObj.pathname.startsWith('/api/folder/stream/') && (req.method === 'GET' || req.method === 'HEAD')) {
     const { requestedId, service } = resolveRequestedService(urlObj);
     if (!service) {
       json(res, 404, { error: 'Service not found', requestedId });

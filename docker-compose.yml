@@ -1,0 +1,21 @@
+services:
+  embytok:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: embytok:local
+    container_name: embytok
+    restart: unless-stopped
+    ports:
+      - "${EMBYTOK_PORT:-5176}:5176"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "5176"
+      SERVE_WEB: "true"
+      WEB_ROOT: "/app/dist"
+      LAN_CONFIG_FILE: "/app/data/lan-media-config.json"
+      MEDIA_ROOT: "/media"
+      BROWSE_ROOTS: "/media"
+    volumes:
+      - "./lan-media-config.json:/app/data/lan-media-config.json"
+      - "${EMBYTOK_MEDIA_PATH:-./media}:/media:ro"

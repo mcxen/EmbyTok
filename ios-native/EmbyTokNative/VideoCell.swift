@@ -39,6 +39,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private var cacheInfoToken = UUID()
     private var sizeProbeWorkItem: DispatchWorkItem?
     private var hasRequestedRemoteSize = false
+    private var shouldResumeAfterSeek = false
     private var isFavorite = false
     private var currentVideoSizeBytes: Int64?
 
@@ -212,6 +213,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         sizeProbeWorkItem?.cancel()
         sizeProbeWorkItem = nil
         hasRequestedRemoteSize = false
+        shouldResumeAfterSeek = false
         cacheSizeLabel.text = "--"
         isFavorite = false
         currentVideoSizeBytes = nil
@@ -246,6 +248,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         sizeProbeWorkItem?.cancel()
         sizeProbeWorkItem = nil
         hasRequestedRemoteSize = false
+        shouldResumeAfterSeek = false
         updateFavoriteIcon()
 
         var resolvedPlayerItem: AVPlayerItem?
@@ -336,6 +339,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         playerView.player = nil
         player = nil
         playerItem = nil
+        shouldResumeAfterSeek = false
     }
 
     func handleMemoryWarning(isActiveCell: Bool) {
@@ -454,6 +458,10 @@ private extension VideoCell {
     }
 
     @objc func seekTouchDown() {
+        let status = player?.timeControlStatus
+        shouldResumeAfterSeek = (player?.rate ?? 0) > 0
+            || status == .playing
+            || status == .waitingToPlayAtSpecifiedRate
         isSeeking = true
     }
 
@@ -464,7 +472,22 @@ private extension VideoCell {
     }
 
     @objc func seekTouchUp() {
-        isSeeking = false
+        guard let player = player else {
+            isSeeking = false
+            shouldResumeAfterSeek = false
+            return
+        }
+
+        let time = CMTime(seconds: Double(progressSlider.value), preferredTimescale: 600)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            guard let self = self else { return }
+            self.isSeeking = false
+            if self.shouldResumeAfterSeek {
+                player.playImmediately(atRate: 1.0)
+                self.updatePlayPauseIcon()
+            }
+            self.shouldResumeAfterSeek = false
+        }
     }
 
     func attachLoopObserver() {

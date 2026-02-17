@@ -211,55 +211,55 @@ ios-native/EmbyTokNative.xcodeproj
 
 ## Docker 部署
 
-项目包含 Docker 支持，可以轻松部署为 Web 应用。支持多架构（AMD64/ARM64），可在不同硬件平台上运行。
+当前仓库已内置可运行的 `Dockerfile` 和 Compose 配置，容器内同时提供：
+1. 网页静态站点（`dist`）
+2. 文件服务 API（`/api/folder/*`，含 `Range/HEAD`，用于 Web 和 iOS 播放）
 
-### 镜像信息
+### 1) 准备媒体目录
 
-- **镜像名称**：crpi-90mw3693mrc3nsxp.cn-shanghai.personal.cr.aliyuncs.com/migumigu/embytok
-- **支持架构**：AMD64 (x86_64), ARM64 (aarch64)
-- **标签**：latest, 1.0.2
-
-### 直接使用 Docker 命令
+在宿主机准备一个视频目录（示例）：
 
 ```bash
-# 拉取并运行镜像（Docker 会自动选择适合您硬件架构的版本）
-docker run -d \
-  --name embytok-web \
-  --restart unless-stopped \
-  -p 8080:80 \
-  crpi-90mw3693mrc3nsxp.cn-shanghai.personal.cr.aliyuncs.com/migumigu/embytok:latest
+mkdir -p ./media
 ```
 
-### 使用 Docker Compose
+然后将你的视频放进 `./media`（或使用自定义路径，通过 `EMBYTOK_MEDIA_PATH` 覆盖）。
 
-#### 简单部署
-
-使用 `docker-compose.simple.yml` 进行快速部署：
-
-```yaml
-version: '3.8'
-
-services:
-  # EmbyTok 前端应用 - 简单版配置
-  embytok:
-    image: crpi-90mw3693mrc3nsxp.cn-shanghai.personal.cr.aliyuncs.com/migumigu/embytok:latest
-    container_name: embytok-web
-    restart: unless-stopped
-    ports:
-      - "5175:80"  # Web界面端口
-    environment:
-      - NODE_ENV=production
-    network_mode: bridge
-networks: {}
-```
-
-运行简单配置：
+### 2) 一键启动（推荐）
 
 ```bash
-docker-compose -f docker-compose.simple.yml up -d
+docker compose up -d --build
 ```
 
-默认情况下，应用将在端口 5175 上可用。
+默认会监听：
+
+- Web: `http://<宿主机IP>:5176`
+- Folder API: `http://<宿主机IP>:5176/api/folder/ping`
+
+可选环境变量：
+
+- `EMBYTOK_PORT`：对外端口（默认 `5176`）
+- `EMBYTOK_MEDIA_PATH`：宿主机媒体目录（默认 `./media`）
+
+### 3) 快速启动（仅网页 + API，不挂媒体卷）
+
+```bash
+docker compose -f docker-compose.simple.yml up -d --build
+```
+
+### 4) 网页端观看
+
+1. 浏览器打开 `http://<宿主机IP>:5176`
+2. 登录页选择 **文件服务**
+3. 服务地址填写 `http://<宿主机IP>:5176`
+4. 选择视频流服务后即可播放
+
+### 5) iOS 客户端观看
+
+1. iOS 原生客户端选择 **Folder**
+2. 服务器地址填写 `http://<宿主机IP>:5176`
+3. “密码 / Token / ServiceId” 填服务名或服务 ID（可在网页管理页看到）
+4. 连接后即可播放（已兼容容器内流媒体 `Range/HEAD` 请求）
 
 ## 配置
 

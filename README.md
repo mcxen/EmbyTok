@@ -30,6 +30,7 @@ EmbyTok 是一个为 Emby 媒体服务器设计的竖屏视频浏览客户端，
 - 📱 **竖屏优化**：专为手机竖屏体验优化的界面设计
 - ♾️ **无限连播模式**：支持视频自动连续播放，无需手动操作
 - 📱 **平板模式**：支持平板模式
+- 📱 **iOS 原生应用（UIKit）**：支持 Emby / 文件服务 MP4 播放、底部进度条控制、网格“查看全部”
 
 ## 技术栈
 
@@ -42,6 +43,7 @@ EmbyTok 是一个为 Emby 媒体服务器设计的竖屏视频浏览客户端，
 - 多架构 Docker 支持 (AMD64/ARM64)
 - Nginx 生产环境部署
 - PWA 支持
+- UIKit + AVFoundation (iOS 原生播放器)
 
 ## 安装和设置
 
@@ -176,6 +178,36 @@ MEDIA_ROOT=/Volumes/Media/Movies PORT=8088 npm run lan:server
    ```bash
    ./build-apk.sh
    ```
+
+## iOS 原生应用（UIKit）
+
+最低系统要求：iOS 16 / iPadOS 16。
+
+### 1) 打开项目
+
+使用 Xcode 打开：
+```
+ios-native/EmbyTokNative.xcodeproj
+```
+
+### 2) 配置签名
+
+在 Target → Signing & Capabilities 中选择你的开发团队（个人/企业）。  
+如果遇到 Bundle Identifier 冲突，请改成唯一值。
+
+### 3) 运行到真机
+
+1. 选择你的 iPhone/iPad 作为运行目标
+2. 点击 Run（▶）
+3. 首次运行需在设备设置中信任开发者证书
+
+### 4) 连接方式
+
+支持以下后端：
+1. Emby（MP4 直链）
+2. 文件服务（Folder Server，局域网）
+
+> 目前 iOS 原生仅实现 MP4 直链播放。Plex/HLS 后续可继续扩展。
 
 ## Docker 部署
 

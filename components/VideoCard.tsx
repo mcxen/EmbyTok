@@ -390,18 +390,22 @@ const VideoCard: React.FC<VideoCardProps> = ({
   const rotatedScale = canScaleRotated
       ? Math.min(containerWidth / baseHeight, containerHeight / baseWidth)
       : 1;
+  const rotatedFrameWidth = canScaleRotated ? Math.round(baseWidth * rotatedScale) : undefined;
+  const rotatedFrameHeight = canScaleRotated ? Math.round(baseHeight * rotatedScale) : undefined;
 
-  const rotatedVideoStyle: React.CSSProperties = isVideoRotated
+  const rotatedFrameStyle: React.CSSProperties = isVideoRotated
       ? {
           transform: `rotate(${rotationDeg}deg)`,
           transformOrigin: 'center center',
-          width: canScaleRotated ? `${Math.round(baseWidth * rotatedScale)}px` : '100%',
-          height: canScaleRotated ? `${Math.round(baseHeight * rotatedScale)}px` : '100%',
+          width: rotatedFrameWidth ? `${rotatedFrameWidth}px` : '100%',
+          height: rotatedFrameHeight ? `${rotatedFrameHeight}px` : '100%',
           maxWidth: '100%',
           maxHeight: '100%',
+          willChange: 'transform',
         }
       : {
-          transform: `rotate(${rotationDeg}deg)`,
+          width: '100%',
+          height: '100%',
         };
   const safeDuration = Number.isFinite(duration) ? duration : 0;
   const safeCurrentTime = Math.min(currentTime, safeDuration);
@@ -433,35 +437,39 @@ const VideoCard: React.FC<VideoCardProps> = ({
           </div>
       )}
 
-      {/* Video Element */}
-      <video
-        ref={videoRef}
-        className={`w-full h-full pointer-events-none relative z-10 bg-transparent ${videoObjectFitClass}`}
-        style={rotatedVideoStyle}
-        src={videoSrc}
-        poster={posterSrc || undefined}
-        loop={!isAutoPlay} // Disable loop in AutoPlay mode to trigger onEnded
-        playsInline
-        autoPlay
-        muted={isMuted}
-        onPlaying={handlePlaying}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onCanPlay={handleCanPlay}
-        onEnded={handleVideoEnded}
-        onError={() => setError("无法加载视频")}
-      />
-
-      {/* Manual Poster Overlay */}
-      {!hasStarted && (
-        <VideoPoster
-          item={item}
-          client={client}
-          className={`absolute inset-0 w-full h-full z-10 bg-transparent pointer-events-none ${videoObjectFitClass}`}
-          style={rotatedVideoStyle}
-          alt=""
+      {/* Video Frame */}
+      <div
+        className="relative z-10 flex items-center justify-center"
+        style={rotatedFrameStyle}
+      >
+        <video
+          ref={videoRef}
+          className={`w-full h-full pointer-events-none bg-transparent ${videoObjectFitClass}`}
+          src={videoSrc}
+          poster={posterSrc || undefined}
+          loop={!isAutoPlay} // Disable loop in AutoPlay mode to trigger onEnded
+          playsInline
+          autoPlay
+          preload={isActive ? 'auto' : 'metadata'}
+          muted={isMuted}
+          onPlaying={handlePlaying}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onCanPlay={handleCanPlay}
+          onEnded={handleVideoEnded}
+          onError={() => setError("无法加载视频")}
         />
-      )}
+
+        {/* Manual Poster Overlay */}
+        {!hasStarted && (
+          <VideoPoster
+            item={item}
+            client={client}
+            className={`absolute inset-0 w-full h-full z-10 bg-transparent pointer-events-none ${videoObjectFitClass}`}
+            alt=""
+          />
+        )}
+      </div>
 
       {/* Play/Pause Overlay Icon */}
       {!isPlaying && !error && !seekOffset && !isLongPress.current && (

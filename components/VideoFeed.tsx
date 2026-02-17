@@ -25,6 +25,7 @@ interface VideoFeedProps {
 }
 
 const PREFETCH_AHEAD = 5;
+const SAFARI_PREFETCH_AHEAD = 2;
 
 const VideoFeed: React.FC<VideoFeedProps> = ({ 
     videos, 
@@ -84,6 +85,10 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
       return;
     }
 
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isSafari =
+      /Safari/i.test(userAgent) &&
+      !/Chrome|CriOS|Edg|OPR|FxiOS|Chromium/i.test(userAgent);
     const connection = (navigator as Navigator & {
       connection?: { saveData?: boolean; effectiveType?: string };
     }).connection;
@@ -93,8 +98,11 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
       return;
     }
 
+    const prefetchAhead = isSafari ? SAFARI_PREFETCH_AHEAD : PREFETCH_AHEAD;
+    const prefetchVideoMode = isSafari ? 'metadata' : 'auto';
+
     const start = activeIndex + 1;
-    const end = Math.min(videos.length, start + PREFETCH_AHEAD);
+    const end = Math.min(videos.length, start + prefetchAhead);
     const nextIds = new Set<string>();
 
     for (let index = start; index < end; index += 1) {
@@ -106,7 +114,7 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
 
       if (!prefetchPoolRef.current.has(item.Id)) {
         const prefetchVideo = document.createElement('video');
-        prefetchVideo.preload = 'auto';
+        prefetchVideo.preload = prefetchVideoMode;
         prefetchVideo.muted = true;
         prefetchVideo.playsInline = true;
         prefetchVideo.src = url;

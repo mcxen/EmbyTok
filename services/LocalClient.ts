@@ -34,6 +34,7 @@ const VIDEO_EXTENSIONS = new Set([
   'm2ts',
   '3gp',
 ]);
+const TS_VIDEO_MIN_BYTES = 5 * 1024 * 1024;
 
 export class LocalClient extends MediaClient {
   private static activeObjectUrls: Set<string> = new Set();
@@ -201,9 +202,16 @@ export class LocalClient extends MediaClient {
 
   private isVideoFile(file: File): boolean {
     if (file.type.startsWith('video/')) {
+      if (this.getExtension(file.name) === 'ts' && file.size < TS_VIDEO_MIN_BYTES) {
+        return false;
+      }
       return true;
     }
-    return VIDEO_EXTENSIONS.has(this.getExtension(file.name));
+    const ext = this.getExtension(file.name);
+    if (ext === 'ts' && file.size < TS_VIDEO_MIN_BYTES) {
+      return false;
+    }
+    return VIDEO_EXTENSIONS.has(ext);
   }
 
   private matchesOrientation(item: EmbyItem, orientationMode: OrientationMode): boolean {

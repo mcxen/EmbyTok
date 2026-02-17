@@ -4,6 +4,7 @@ import Login from './components/Login';
 import VideoFeed from './components/VideoFeed';
 import VideoGrid from './components/VideoGrid';
 import LibrarySelect from './components/LibrarySelect';
+import FolderServiceAdmin from './components/FolderServiceAdmin';
 import { ServerConfig, EmbyLibrary, EmbyItem, FeedType, OrientationMode } from './types';
 import { ClientFactory } from './services/clientFactory';
 import {
@@ -52,6 +53,7 @@ function App() {
   
   // UI State
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [feedType, setFeedType] = useState<FeedType>('latest');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -307,6 +309,7 @@ function App() {
       setSelectedLib(null);
       setFavoriteIds(new Set());
       setIsMenuOpen(false);
+      setIsAdminPanelOpen(false);
   };
 
   const handleLogin = (nextConfig: ServerConfig, files?: File[]) => {
@@ -321,6 +324,7 @@ function App() {
       setLibraries([]);
       setFavoriteIds(new Set());
       setIsBootstrappingLocal(false);
+      setIsAdminPanelOpen(false);
   };
 
   const toggleFullScreen = () => {
@@ -454,6 +458,7 @@ function App() {
                 onLoadMore={() => loadVideos(false)}
                 isAutoPlay={isAutoPlay}
                 onToggleAutoPlay={() => setIsAutoPlay(!isAutoPlay)}
+                forceSwipeAutoplay={config.serverType === 'folder'}
             />
         )}
       </div>
@@ -471,6 +476,17 @@ function App() {
         username={config.username}
         orientationMode={orientationMode}
         onOrientationChange={setOrientationMode}
+        isFolderServer={config.serverType === 'folder'}
+        onOpenAdminPanel={() => {
+          if (config.serverType === 'folder') {
+            setIsAdminPanelOpen(true);
+          }
+        }}
+      />
+      <FolderServiceAdmin
+        isOpen={isAdminPanelOpen}
+        serverUrl={config.url}
+        onClose={() => setIsAdminPanelOpen(false)}
       />
     </div>
   );

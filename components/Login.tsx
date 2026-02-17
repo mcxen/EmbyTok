@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ServerConfig, ServerType } from '../types';
 import { ClientFactory } from '../services/clientFactory';
 import { Server, User, Key, Loader2, Info, FolderOpen } from 'lucide-react';
+import FolderServiceAdmin from './FolderServiceAdmin';
 import {
   clearStartupDirectoryHandle,
   getStartupDirectoryHandle,
@@ -18,6 +19,12 @@ interface LoginProps {
   onLogin: (config: ServerConfig, localFiles?: File[]) => void;
 }
 
+interface FolderServiceOption {
+  id: string;
+  name: string;
+  isActive?: boolean;
+}
+
 const LOCAL_VIDEO_EXTENSIONS = new Set([
   'mp4',
   'mkv',
@@ -31,9 +38,13 @@ const LOCAL_VIDEO_EXTENSIONS = new Set([
   'm2ts',
   '3gp',
 ]);
+const TS_VIDEO_MIN_BYTES = 5 * 1024 * 1024;
 
 const isVideoFile = (file: File) => {
   if (file.type.startsWith('video/')) {
+    if (file.name.toLowerCase().endsWith('.ts') && file.size < TS_VIDEO_MIN_BYTES) {
+      return false;
+    }
     return true;
   }
   const lastDot = file.name.lastIndexOf('.');
@@ -41,7 +52,32 @@ const isVideoFile = (file: File) => {
     return false;
   }
   const ext = file.name.slice(lastDot + 1).toLowerCase();
+  if (ext === 'ts' && file.size < TS_VIDEO_MIN_BYTES) {
+    return false;
+  }
   return LOCAL_VIDEO_EXTENSIONS.has(ext);
+};
+
+const normalizeServerUrl = (rawUrl: string) => {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed.replace(/\/$/, '');
+  }
+  return `http://${trimmed}`.replace(/\/$/, '');
+};
+
+const getDevFolderServerDefaultUrl = () => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  const { protocol, hostname, port } = window.location;
+  if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '5173') {
+    return `${protocol}//127.0.0.1:5176`;
+  }
+  return window.location.origin;
 };
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -51,10 +87,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
+  const [folderServiceLoading, setFolderServiceLoading] = useState(false);
   const [error, setError] = useState('');
   const [hasStartupFolder, setHasStartupFolder] = useState(false);
+  const [folderServices, setFolderServices] = useState<FolderServiceOption[]>([]);
+  const [selectedFolderServiceId, setSelectedFolderServiceId] = useState('');
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const isLocalMode = serverType === 'local';
+  const isFolderServerMode = serverType === 'folder';
   const supportsStartupFolder = isStartupFolderSupported();
 
   const getLocalConfig = (): ServerConfig => ({
@@ -74,23 +115,86 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
 
-    // Basic validation
-    let formattedUrl = serverUrl.trim();
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-        formattedUrl = `http://${formattedUrl}`;
-    }
+    const formattedUrl = normalizeServerUrl(serverUrl);
+    const folderServiceSecret = isFolderServerMode ? selectedFolderServiceId : password;
 
     try {
-      const config = await ClientFactory.authenticate(serverType, formattedUrl, username, password);
+      const config = await ClientFactory.authenticate(serverType, formattedUrl, username, folderServiceSecret);
       onLogin(config);
     } catch (err: any) {
       console.error(err);
-      setError(serverType === 'plex' 
-        ? 'Plex连接失败。请尝试使用X-Plex-Token作为密码。'
-        : '连接失败。请检查地址、账号密码，并确保服务端允许跨域访问（CORS）。');
+      if (serverType === 'plex') {
+        setError('Plex连接失败。请尝试使用X-Plex-Token作为密码。');
+      } else if (serverType === 'folder') {
+        setError('文件服务连接失败。请检查服务端地址是否可访问。');
+      } else {
+        setError('连接失败。请检查地址、账号密码，并确保服务端允许跨域访问（CORS）。');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadFolderServices = async (targetUrl?: string, silent: boolean = false) => {
+    const formattedUrl = normalizeServerUrl(targetUrl ?? serverUrl);
+    if (!formattedUrl) {
+      if (!silent) {
+        setError('请先输入文件服务地址');
+      }
+      return;
+    }
+
+    setFolderServiceLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${formattedUrl}/api/folder/services`, {
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`服务列表加载失败 (${response.status})`);
+      }
+
+      const data = await response.json();
+      const items: FolderServiceOption[] = Array.isArray(data?.items) ? data.items : [];
+      setFolderServices(items);
+
+      const current = items.find((item) => item.id === data?.currentServiceId) || items[0];
+      setSelectedFolderServiceId((prev) => {
+        if (prev && items.some((item) => item.id === prev)) {
+          return prev;
+        }
+        return current?.id || '';
+      });
+    } catch (err: any) {
+      console.error(err);
+      setFolderServices([]);
+      setSelectedFolderServiceId('');
+      if (!silent) {
+        setError(err?.message || '加载视频流服务列表失败');
+      }
+    } finally {
+      setFolderServiceLoading(false);
+    }
+  };
+
+  const handleServicesUpdated = (services: FolderServiceOption[], currentServiceId: string | null) => {
+    setFolderServices(services);
+    const current = services.find((service) => service.id === currentServiceId) || services[0];
+    setSelectedFolderServiceId(current?.id || '');
+  };
+
+  const handleOpenAdminPanel = () => {
+    const input = window.prompt('请输入管理员密码');
+    if (input === null) {
+      return;
+    }
+    if (input !== 'admin') {
+      setError('管理员密码错误');
+      return;
+    }
+    setError('');
+    setIsAdminOpen(true);
   };
 
   useEffect(() => {
@@ -115,6 +219,24 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       cancelled = true;
     };
   }, [supportsStartupFolder]);
+
+  useEffect(() => {
+    if (!isFolderServerMode) {
+      return;
+    }
+    if (!serverUrl.trim()) {
+      setServerUrl(getDevFolderServerDefaultUrl());
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      loadFolderServices(serverUrl, true);
+    }, 350);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isFolderServerMode, serverUrl]);
 
   const loadFromDirectoryHandle = async (handle: any, persistAsStartup: boolean) => {
     setError('');
@@ -240,6 +362,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               >
                   本地
               </button>
+              <button
+                type="button"
+                onClick={() => setServerType('folder')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-bold transition-all focus:ring-2 focus:ring-indigo-500 outline-none ${serverType === 'folder' ? 'bg-cyan-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                  文件服务
+              </button>
           </div>
 
           {!isLocalMode ? (
@@ -252,7 +381,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     type="text"
                     value={serverUrl}
                     onChange={(e) => setServerUrl(e.target.value)}
-                    placeholder={serverType === 'plex' ? 'http://192.168.1.10:32400' : 'http://192.168.1.100:8096'}
+                    placeholder={
+                      serverType === 'plex'
+                        ? 'http://192.168.1.10:32400'
+                        : serverType === 'folder'
+                          ? 'http://192.168.1.50:5176'
+                          : 'http://192.168.1.100:8096'
+                    }
                     className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
                     required
                     />
@@ -267,26 +402,74 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={serverType === 'plex' ? '可选 (默认 User)' : 'User'}
+                    placeholder={
+                      serverType === 'plex'
+                        ? '可选 (默认 User)'
+                        : serverType === 'folder'
+                          ? '可选 (默认 Folder User)'
+                          : 'User'
+                    }
                     className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
                     required={serverType === 'emby'}
                     />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase">{serverType === 'plex' ? 'X-Plex-Token / 密码' : '密码'}</label>
-                 <div className="relative">
-                    <Key className="absolute left-3 top-3 w-5 h-5 text-zinc-500" />
-                    <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={serverType === 'plex' ? '必填' : '可选'}
-                    className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
+              {isFolderServerMode && (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-zinc-400 uppercase">视频流服务名称</label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedFolderServiceId}
+                      onChange={(e) => setSelectedFolderServiceId(e.target.value)}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-3 text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                    >
+                      {folderServices.length === 0 && (
+                        <option value="">未加载到服务</option>
+                      )}
+                      {folderServices.map((service) => (
+                        <option key={service.id} value={service.id}>
+                          {service.name}{service.isActive ? ' (当前)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => loadFolderServices()}
+                      disabled={folderServiceLoading}
+                      className="px-3 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm font-semibold disabled:opacity-50"
+                    >
+                      {folderServiceLoading ? '加载中' : '刷新'}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenAdminPanel}
+                    className="w-full py-2.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 text-sm font-semibold"
+                  >
+                    打开管理页面（配置文件夹服务）
+                  </button>
+                  <p className="text-[11px] text-zinc-500 leading-relaxed">
+                    管理员在管理页配置后，其他设备仅需选择服务名称并连接。
+                  </p>
                 </div>
-              </div>
+              )}
+
+              {!isFolderServerMode && (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-zinc-400 uppercase">{serverType === 'plex' ? 'X-Plex-Token / 密码' : '密码'}</label>
+                   <div className="relative">
+                      <Key className="absolute left-3 top-3 w-5 h-5 text-zinc-500" />
+                      <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={serverType === 'plex' ? '必填' : '可选'}
+                      className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="space-y-2">
@@ -363,7 +546,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white outline-none ${serverType === 'plex' ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+              className={`w-full text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white outline-none ${
+                serverType === 'plex'
+                  ? 'bg-yellow-600 hover:bg-yellow-700'
+                  : serverType === 'folder'
+                    ? 'bg-cyan-600 hover:bg-cyan-700'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : '连接'}
             </button>
@@ -371,9 +560,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </form>
         
         <div className="text-center text-xs text-zinc-600 px-4">
-            <p>EmbyTok 是非官方客户端。支持 Emby、Jellyfin、Plex 和本地文件夹模式。</p>
+            <p>EmbyTok 是非官方客户端。支持 Emby、Jellyfin、Plex、本地文件夹和局域网文件服务模式。</p>
         </div>
       </div>
+      <FolderServiceAdmin
+        isOpen={isAdminOpen}
+        serverUrl={serverUrl}
+        onClose={() => setIsAdminOpen(false)}
+        onServicesUpdated={handleServicesUpdated}
+      />
     </div>
   );
 };

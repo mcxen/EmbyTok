@@ -5,9 +5,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-with-lan.mjs",
+    "dev:web": "vite",
+    "dev:lan": "vite --host 0.0.0.0",
+    "dev:stack": "node scripts/dev-with-lan.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "lan:server": "node server/lan-media-server.mjs",
+    "lan:start": "npm run build && node server/lan-media-server.mjs",
     "cap:add": "cap add android",
     "cap:sync": "cap sync",
     "build:android": "tsc && vite build && cap sync android"

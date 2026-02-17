@@ -1,5 +1,5 @@
 
-export type ServerType = 'emby' | 'plex' | 'local';
+export type ServerType = 'emby' | 'plex' | 'local' | 'folder';
 
 export interface ServerConfig {
   url: string;

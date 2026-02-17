@@ -19,6 +19,9 @@ interface LibrarySelectProps {
   
   orientationMode: OrientationMode;
   onOrientationChange: (mode: OrientationMode) => void;
+
+  isFolderServer?: boolean;
+  onOpenAdminPanel?: () => void;
 }
 
 type MenuMode = 'list' | 'settings';
@@ -35,7 +38,9 @@ const LibrarySelect: React.FC<LibrarySelectProps> = ({
     serverUrl,
     username,
     orientationMode,
-    onOrientationChange
+    onOrientationChange,
+    isFolderServer = false,
+    onOpenAdminPanel
 }) => {
   const [mode, setMode] = useState<MenuMode>('list');
 
@@ -47,6 +52,18 @@ const LibrarySelect: React.FC<LibrarySelectProps> = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleOpenAdmin = () => {
+      if (!isFolderServer || !onOpenAdminPanel) return;
+      const password = window.prompt('请输入管理员密码');
+      if (password === null) return;
+      if (password !== 'admin') {
+          window.alert('管理员密码错误');
+          return;
+      }
+      onOpenAdminPanel();
+      onClose();
+  };
 
   return (
     <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-start">
@@ -151,6 +168,14 @@ const LibrarySelect: React.FC<LibrarySelectProps> = ({
                           </div>
                           
                           <div className="pt-2 border-t border-zinc-700/50">
+                              {isFolderServer && (
+                                <button
+                                  onClick={handleOpenAdmin}
+                                  className="w-full mb-2 py-2.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                                >
+                                  管理员面板
+                                </button>
+                              )}
                               <button 
                                 onClick={onLogout}
                                 className="w-full py-2.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium flex items-center justify-center gap-2 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"

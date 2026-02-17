@@ -2,7 +2,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { EmbyItem } from '../types';
 import { MediaClient } from '../services/MediaClient';
-import { Play, Pause, AlertCircle, Heart, Info, Disc, ChevronsRight, Rewind, FastForward, Zap, Infinity } from 'lucide-react';
+import { Play, Pause, AlertCircle, Heart, Info, Disc, ChevronsRight, Rewind, FastForward, Zap, Infinity, RotateCw } from 'lucide-react';
+import VideoPoster from './VideoPoster';
 
 interface VideoCardProps {
   item: EmbyItem;
@@ -15,6 +16,7 @@ interface VideoCardProps {
   isAutoPlay?: boolean;
   onToggleAutoPlay?: () => void;
   onVideoEnd?: () => void;
+  forceSwipeAutoplay?: boolean;
 }
 
 const VideoCard: React.FC<VideoCardProps> = ({ 
@@ -27,14 +29,21 @@ const VideoCard: React.FC<VideoCardProps> = ({
     onToggleMute,
     isAutoPlay = false,
     onToggleAutoPlay = () => {},
-    onVideoEnd = () => {}
+    onVideoEnd = () => {},
+    forceSwipeAutoplay = false,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const playRetryTimerRef = useRef<number | null>(null);
+  const autoplayMutedFallbackRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false); 
   const [error, setError] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [rotationDeg, setRotationDeg] = useState(0);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+  );
   
   // Progress State
   const [currentTime, setCurrentTime] = useState(0);
@@ -68,10 +77,16 @@ const VideoCard: React.FC<VideoCardProps> = ({
   useEffect(() => {
       const handleResize = () => {
           setIsScreenLandscape(window.innerWidth > window.innerHeight);
+          setIsNarrowViewport(window.innerWidth <= 768);
       };
       window.addEventListener('resize', handleResize);
       return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+      setRotationDeg(0);
+      autoplayMutedFallbackRef.current = false;
+  }, [item.Id]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -79,33 +94,80 @@ const VideoCard: React.FC<VideoCardProps> = ({
     
     video.muted = isMuted;
 
+    const clearPlayRetry = () => {
+      if (playRetryTimerRef.current !== null) {
+        window.clearTimeout(playRetryTimerRef.current);
+        playRetryTimerRef.current = null;
+      }
+    };
+
+    const tryPlay = (attempt: number = 0) => {
+      if (!isActive || !videoRef.current) {
+        return;
+      }
+
+      const targetVideo = videoRef.current;
+      const playPromise = targetVideo.play();
+      if (playPromise === undefined) {
+        setIsPlaying(!targetVideo.paused);
+        return;
+      }
+
+      playPromise
+        .then(() => {
+          clearPlayRetry();
+          setIsPlaying(true);
+        })
+        .catch((err) => {
+          if (!isActive || !videoRef.current) {
+            return;
+          }
+
+          if (
+            forceSwipeAutoplay &&
+            !autoplayMutedFallbackRef.current &&
+            !videoRef.current.muted
+          ) {
+            autoplayMutedFallbackRef.current = true;
+            videoRef.current.muted = true;
+            if (!isMuted) {
+              onToggleMute();
+            }
+          }
+
+          if (forceSwipeAutoplay && attempt < 4) {
+            clearPlayRetry();
+            playRetryTimerRef.current = window.setTimeout(() => {
+              tryPlay(attempt + 1);
+            }, 220);
+            return;
+          }
+
+          console.warn("Autoplay failed", err);
+          setIsPlaying(false);
+        });
+    };
+
     if (isActive) {
       setError(null);
       video.playbackRate = 1.0;
       setPlaybackRate(1.0);
-      
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-              // Only set playing state, hasStarted is set in onPlaying event for smoother visual transition
-              setIsPlaying(true);
-          })
-          .catch((err) => {
-            console.warn("Autoplay failed", err);
-            setIsPlaying(false);
-          });
-      }
+      tryPlay();
       
       // CRITICAL FIX: preventScroll: true prevents the browser from jumping the scroll position
       containerRef.current?.focus({ preventScroll: true });
     } else {
+      clearPlayRetry();
       video.pause();
       video.currentTime = 0;
       setIsPlaying(false);
       setHasStarted(false); 
     }
-  }, [isActive, isMuted]);
+
+    return () => {
+      clearPlayRetry();
+    };
+  }, [isActive, isMuted, forceSwipeAutoplay]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -135,6 +197,20 @@ const VideoCard: React.FC<VideoCardProps> = ({
       if (videoRef.current) {
           const nextDuration = Number.isFinite(videoRef.current.duration) ? videoRef.current.duration : 0;
           setDuration(nextDuration);
+      }
+  };
+
+  const handleCanPlay = () => {
+      if (!isActive) return;
+      if (!videoRef.current) return;
+      if (!videoRef.current.paused) return;
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+          playPromise
+            .then(() => setIsPlaying(true))
+            .catch(() => {
+              // ignore here; main autoplay retry path is handled in effect
+            });
       }
   };
 
@@ -284,9 +360,19 @@ const VideoCard: React.FC<VideoCardProps> = ({
 
   const showBlurBackground = isScreenLandscape && !isContentLandscape;
   
-  const videoObjectFitClass = (isScreenLandscape || isContentLandscape) 
+  const videoObjectFitClass = (isNarrowViewport || isScreenLandscape || isContentLandscape) 
       ? 'object-contain' 
       : 'object-cover';
+  const isVideoRotated = rotationDeg % 180 !== 0;
+  const rotatedVideoStyle: React.CSSProperties = isVideoRotated
+      ? {
+          transform: `rotate(${rotationDeg}deg)`,
+          width: '100dvh',
+          height: '100dvw',
+        }
+      : {
+          transform: `rotate(${rotationDeg}deg)`,
+        };
   const safeDuration = Number.isFinite(duration) ? duration : 0;
   const safeCurrentTime = Math.min(currentTime, safeDuration);
 
@@ -321,23 +407,28 @@ const VideoCard: React.FC<VideoCardProps> = ({
       <video
         ref={videoRef}
         className={`w-full h-full pointer-events-none relative z-10 bg-transparent ${videoObjectFitClass}`}
+        style={rotatedVideoStyle}
         src={videoSrc}
         loop={!isAutoPlay} // Disable loop in AutoPlay mode to trigger onEnded
         playsInline
+        autoPlay
         muted={isMuted}
         onPlaying={handlePlaying}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
+        onCanPlay={handleCanPlay}
         onEnded={handleVideoEnded}
         onError={() => setError("无法加载视频")}
       />
 
       {/* Manual Poster Overlay */}
-      {posterSrc && !hasStarted && (
-        <img 
-            src={posterSrc}
-            className={`absolute inset-0 w-full h-full z-10 bg-transparent pointer-events-none ${videoObjectFitClass}`}
-            alt=""
+      {!hasStarted && (
+        <VideoPoster
+          item={item}
+          client={client}
+          className={`absolute inset-0 w-full h-full z-10 bg-transparent pointer-events-none ${videoObjectFitClass}`}
+          style={rotatedVideoStyle}
+          alt=""
         />
       )}
 
@@ -402,11 +493,12 @@ const VideoCard: React.FC<VideoCardProps> = ({
           <div className="absolute right-2 bottom-24 flex flex-col items-center gap-6 z-30 pointer-events-auto">
               <div className="relative w-12 h-12 mb-2">
                   <div className="w-12 h-12 rounded-full border-2 border-white overflow-hidden bg-zinc-800">
-                      {posterSrc ? (
-                          <img src={posterSrc} alt="Poster" className="w-full h-full object-cover" />
-                      ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-indigo-600 text-xs">Media</div>
-                      )}
+                      <VideoPoster
+                        item={item}
+                        client={client}
+                        alt="Poster"
+                        className="w-full h-full object-cover"
+                      />
                   </div>
               </div>
 
@@ -441,6 +533,20 @@ const VideoCard: React.FC<VideoCardProps> = ({
                       <Info className="w-7 h-7 text-white drop-shadow-md" />
                   </button>
                   <span className="text-white text-xs font-bold shadow-black drop-shadow-md">信息</span>
+              </div>
+
+              <div className="flex flex-col items-center gap-1">
+                  <button
+                    tabIndex={0}
+                    onTouchStart={stopProp}
+                    onMouseDown={stopProp}
+                    onTouchEnd={(e) => handleButtonAction(e, () => setRotationDeg((prev) => (prev + 90) % 360))}
+                    onClick={(e) => handleButtonAction(e, () => setRotationDeg((prev) => (prev + 90) % 360))}
+                    className="p-2 rounded-full bg-transparent active:bg-white/10 focus:ring-2 focus:ring-cyan-500 outline-none"
+                  >
+                      <RotateCw className="w-7 h-7 text-white/80 drop-shadow-md" />
+                  </button>
+                  <span className="text-white text-xs font-bold shadow-black drop-shadow-md">旋转</span>
               </div>
 
               <div 

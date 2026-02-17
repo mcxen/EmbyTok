@@ -21,6 +21,7 @@ interface VideoFeedProps {
   onLoadMore: () => void;
   isAutoPlay?: boolean;
   onToggleAutoPlay?: () => void;
+  forceSwipeAutoplay?: boolean;
 }
 
 const VideoFeed: React.FC<VideoFeedProps> = ({ 
@@ -38,7 +39,8 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
     hasMore,
     onLoadMore,
     isAutoPlay = false,
-    onToggleAutoPlay = () => {}
+    onToggleAutoPlay = () => {},
+    forceSwipeAutoplay = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -161,6 +163,7 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
                   isAutoPlay={isAutoPlay}
                   onToggleAutoPlay={onToggleAutoPlay}
                   onVideoEnd={handleNextVideo}
+                  forceSwipeAutoplay={forceSwipeAutoplay}
                 />
               ) : (
                 <div className="w-full h-full bg-black flex items-center justify-center">

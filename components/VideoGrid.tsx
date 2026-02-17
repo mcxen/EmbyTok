@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useLayoutEffect } from 'react';
 import { EmbyItem, FeedType } from '../types';
 import { MediaClient } from '../services/MediaClient';
 import { PlayCircle, Clock, RefreshCw, Shuffle } from 'lucide-react';
+import VideoPoster from './VideoPoster';
 
 interface VideoGridProps {
   videos: EmbyItem[];
@@ -84,10 +85,6 @@ const VideoGrid: React.FC<VideoGridProps> = ({
     <div className="w-full h-full overflow-y-auto bg-black p-2 pb-24">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pt-16">
         {videos.map((item, index) => {
-          const posterSrc = item.ImageTags?.Primary
-            ? client.getImageUrl(item.Id, item.ImageTags.Primary, 'Primary')
-            : undefined;
-
           return (
             <div 
               key={item.Id}
@@ -99,18 +96,12 @@ const VideoGrid: React.FC<VideoGridProps> = ({
               }}
               className={`relative aspect-[2/3] bg-zinc-900 rounded-lg overflow-hidden cursor-pointer transition-all group focus:scale-105 focus:ring-4 focus:ring-indigo-500 outline-none z-10 ${index === currentIndex ? 'ring-2 ring-white/50' : ''}`}
             >
-              {posterSrc ? (
-                <img 
-                  src={posterSrc} 
-                  alt={item.Name} 
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                   Media
-                </div>
-              )}
+              <VideoPoster
+                item={item}
+                client={client}
+                alt={item.Name}
+                className="w-full h-full object-cover"
+              />
 
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60" />
 

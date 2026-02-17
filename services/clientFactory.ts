@@ -4,6 +4,7 @@ import { MediaClient } from './MediaClient';
 import { EmbyClient } from './EmbyClient';
 import { PlexClient } from './PlexClient';
 import { LocalClient } from './LocalClient';
+import { FolderServerClient } from './FolderServerClient';
 
 interface CreateClientOptions {
     localFiles?: File[];
@@ -17,6 +18,9 @@ export class ClientFactory {
         if (config.serverType === 'local') {
             return new LocalClient(config, options.localFiles || []);
         }
+        if (config.serverType === 'folder') {
+            return new FolderServerClient(config);
+        }
         return new EmbyClient(config);
     }
 
@@ -29,6 +33,11 @@ export class ClientFactory {
                 userId: 'local-user',
                 serverType: 'local',
             };
+        }
+        if (type === 'folder') {
+            const dummyConfig: ServerConfig = { url, username: '', token: '', userId: '', serverType: type };
+            const client = this.create(dummyConfig);
+            return client.authenticate(username, password);
         }
 
         // Create a dummy config to instantiate the client for auth

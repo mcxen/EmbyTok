@@ -15,6 +15,7 @@ const VIDEO_EXTENSIONS = new Set([
   'm2ts',
   '3gp',
 ]);
+const TS_VIDEO_MIN_BYTES = 5 * 1024 * 1024;
 
 type DirectoryPermission = 'granted' | 'prompt' | 'denied';
 type DirectoryHandleLike = any;
@@ -29,9 +30,16 @@ const getExtension = (fileName: string): string => {
 
 const isVideoFile = (file: File): boolean => {
   if (file.type.startsWith('video/')) {
+    if (getExtension(file.name) === 'ts' && file.size < TS_VIDEO_MIN_BYTES) {
+      return false;
+    }
     return true;
   }
-  return VIDEO_EXTENSIONS.has(getExtension(file.name));
+  const ext = getExtension(file.name);
+  if (ext === 'ts' && file.size < TS_VIDEO_MIN_BYTES) {
+    return false;
+  }
+  return VIDEO_EXTENSIONS.has(ext);
 };
 
 const openDb = (): Promise<IDBDatabase> =>

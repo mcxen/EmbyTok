@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Xcode user data
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate

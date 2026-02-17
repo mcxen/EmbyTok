@@ -1,6 +1,7 @@
 import Foundation
 
 final class APIClient {
+    private static let largeVideoThresholdBytes: Int64 = 700 * 1024 * 1024
     private let session: URLSession
 
     init(session: URLSession = .shared) {
@@ -39,12 +40,18 @@ final class APIClient {
     func videoURL(for item: VideoItem, config: ServerConfig) -> URL? {
         switch config.serverType {
         case .emby:
-            let url = config.baseURL.appendingPathComponent("/Videos/\(item.id)/stream.mp4")
+            let useAdaptiveHLS = (item.sizeBytes ?? 0) >= Self.largeVideoThresholdBytes
+            let path = useAdaptiveHLS ? "/Videos/\(item.id)/master.m3u8" : "/Videos/\(item.id)/stream.mp4"
+            let url = config.baseURL.appendingPathComponent(path)
             var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            comps?.queryItems = [
-                URLQueryItem(name: "Static", value: "true"),
-                URLQueryItem(name: "api_key", value: config.token)
-            ]
+            var queryItems: [URLQueryItem] = [URLQueryItem(name: "api_key", value: config.token)]
+            if !useAdaptiveHLS {
+                queryItems.insert(URLQueryItem(name: "Static", value: "true"), at: 0)
+            } else {
+                queryItems.append(URLQueryItem(name: "StartTimeTicks", value: "0"))
+                queryItems.append(URLQueryItem(name: "EnableSubtitlesInManifest", value: "true"))
+            }
+            comps?.queryItems = queryItems
             return comps?.url
         case .folder:
             let url = config.baseURL.appendingPathComponent("/api/folder/stream/\(item.id)")
@@ -59,15 +66,17 @@ final class APIClient {
     func posterURL(for item: VideoItem, config: ServerConfig) -> URL? {
         switch config.serverType {
         case .emby:
-            guard let tag = item.primaryImageTag, !tag.isEmpty else { return nil }
             let url = config.baseURL.appendingPathComponent("/Items/\(item.id)/Images/Primary")
             var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            comps?.queryItems = [
+            var queryItems = [
                 URLQueryItem(name: "maxWidth", value: "800"),
-                URLQueryItem(name: "tag", value: tag),
                 URLQueryItem(name: "quality", value: "90"),
                 URLQueryItem(name: "api_key", value: config.token)
             ]
+            if let tag = item.primaryImageTag, !tag.isEmpty {
+                queryItems.append(URLQueryItem(name: "tag", value: tag))
+            }
+            comps?.queryItems = queryItems
             return comps?.url
         case .folder:
             return nil
@@ -94,6 +103,11 @@ private extension APIClient {
     }
 
     struct EmbyVideoResponse: Decodable {
+        struct EmbyMediaSource: Decodable {
+            let RunTimeTicks: Int64?
+            let Size: Int64?
+        }
+
         struct EmbyImageTags: Decodable {
             let Primary: String?
         }
@@ -105,6 +119,8 @@ private extension APIClient {
             let Width: Int?
             let Height: Int?
             let ImageTags: EmbyImageTags?
+            let RunTimeTicks: Int64?
+            let MediaSources: [EmbyMediaSource]?
         }
 
         let Items: [EmbyItem]
@@ -125,6 +141,63 @@ private extension APIClient {
             let Id: String
             let Name: String
             let Overview: String?
+            let durationSeconds: Double?
+            let sizeBytes: Int64?
+
+            private enum CodingKeys: String, CodingKey {
+                case Id
+                case Name
+                case Overview
+                case Duration
+                case DurationMs
+                case DurationSeconds
+                case RunTimeTicks
+                case Size
+                case FileSize
+                case size
+                case sizeBytes
+                case fileSize
+                case duration
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                Id = try container.decode(String.self, forKey: .Id)
+                Name = try container.decode(String.self, forKey: .Name)
+                Overview = try container.decodeIfPresent(String.self, forKey: .Overview)
+
+                func decodeDouble(_ key: CodingKeys) -> Double? {
+                    return (try? container.decodeIfPresent(Double.self, forKey: key)) ?? nil
+                }
+                func decodeInt64(_ key: CodingKeys) -> Int64? {
+                    return (try? container.decodeIfPresent(Int64.self, forKey: key)) ?? nil
+                }
+
+                let durationMs =
+                    decodeDouble(.DurationMs)
+                    ?? decodeDouble(.Duration)
+                    ?? decodeDouble(.duration)
+                let durationSecDirect = decodeDouble(.DurationSeconds)
+                let ticks = decodeDouble(.RunTimeTicks)
+                if let durationSecDirect {
+                    durationSeconds = durationSecDirect
+                } else if let durationMs {
+                    durationSeconds = durationMs > 10_000 ? durationMs / 1_000.0 : durationMs
+                } else if let ticks {
+                    durationSeconds = ticks / 10_000_000.0
+                } else {
+                    durationSeconds = nil
+                }
+
+                let candidateSizes: [Int64?] = [
+                    decodeInt64(.sizeBytes),
+                    decodeInt64(.Size),
+                    decodeInt64(.FileSize),
+                    decodeInt64(.fileSize),
+                    decodeInt64(.size)
+                ]
+                sizeBytes = candidateSizes.compactMap { $0 }.first
+            }
         }
         let items: [FolderItem]?
         let totalCount: Int?
@@ -278,14 +351,23 @@ private extension APIClient {
 
             do {
                 let decoded = try JSONDecoder().decode(EmbyVideoResponse.self, from: data)
-                let items = decoded.Items.map { item in
-                    VideoItem(
+                let items = decoded.Items.filter { item in
+                    let name = item.Name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return !name.hasPrefix(".")
+                }.map { item in
+                    let runtimeTicks = item.RunTimeTicks
+                        ?? item.MediaSources?.first(where: { ($0.RunTimeTicks ?? 0) > 0 })?.RunTimeTicks
+                    let durationSeconds = runtimeTicks.map { Double($0) / 10_000_000.0 }
+                    let sizeBytes = item.MediaSources?.first(where: { ($0.Size ?? 0) > 0 })?.Size
+                    return VideoItem(
                         id: item.Id,
                         name: item.Name,
                         overview: item.Overview ?? "",
                         width: item.Width,
                         height: item.Height,
-                        primaryImageTag: item.ImageTags?.Primary
+                        primaryImageTag: item.ImageTags?.Primary,
+                        durationSeconds: durationSeconds,
+                        sizeBytes: sizeBytes
                     )
                 }
                 let total = decoded.TotalRecordCount ?? items.count
@@ -333,14 +415,19 @@ private extension APIClient {
 
             do {
                 let decoded = try JSONDecoder().decode(FolderVideosResponse.self, from: data)
-                let items = (decoded.items ?? []).map { item in
-                    VideoItem(
+                let items = (decoded.items ?? []).filter { item in
+                    let name = item.Name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return !name.hasPrefix(".")
+                }.map { item in
+                    return VideoItem(
                         id: item.Id,
                         name: item.Name,
                         overview: item.Overview ?? "",
                         width: nil,
                         height: nil,
-                        primaryImageTag: nil
+                        primaryImageTag: nil,
+                        durationSeconds: item.durationSeconds,
+                        sizeBytes: item.sizeBytes
                     )
                 }
                 let total = decoded.totalCount ?? items.count

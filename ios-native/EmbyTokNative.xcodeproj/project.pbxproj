@@ -17,6 +17,8 @@
 		8C26D442568D4F49B2F03E71 /* VideoCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E3783D1DF6464887CF4B5C /* VideoCell.swift */; };
 		ADF4E492D9DE4D9F99DBBDFA /* VideoGridCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E1837B491A24AD0B329BACE /* VideoGridCell.swift */; };
 		5AD71A599251415B8A00AA9C /* VideoGridViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA95D4E781F345F9853F1BC2 /* VideoGridViewController.swift */; };
+		D89D76B9D4104BD2B996F69D /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34011F96FCEF45C694C9A221 /* SettingsViewController.swift */; };
+		B6AFBA687EDA48D19305348B /* SpeedTestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFD25E85845F49A0AC5F15A3 /* SpeedTestService.swift */; };
 		8D407DA4EEA24A02AF1DB378 /* VideoFeedViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A290181C9545429C36D76E /* VideoFeedViewController.swift */; };
 		9C264715BAF544A99571EDB9 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49CC635ED51642DB9781C362 /* AVFoundation.framework */; };
 		9CCAADB0A0DB49D5AA4DC60E /* ConnectViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99C969545F24619A134CF80 /* ConnectViewController.swift */; };
@@ -35,6 +37,8 @@
 		A0E3783D1DF6464887CF4B5C /* VideoCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCell.swift; sourceTree = "<group>"; };
 		2E1837B491A24AD0B329BACE /* VideoGridCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoGridCell.swift; sourceTree = "<group>"; };
 		EA95D4E781F345F9853F1BC2 /* VideoGridViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoGridViewController.swift; sourceTree = "<group>"; };
+		34011F96FCEF45C694C9A221 /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
+		CFD25E85845F49A0AC5F15A3 /* SpeedTestService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedTestService.swift; sourceTree = "<group>"; };
 		C604167B0B7F487D960E067A /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		C99C969545F24619A134CF80 /* ConnectViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectViewController.swift; sourceTree = "<group>"; };
 		D1BF4748169747BFB08BB500 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -68,6 +72,8 @@
 				A0E3783D1DF6464887CF4B5C /* VideoCell.swift */,
 				EA95D4E781F345F9853F1BC2 /* VideoGridViewController.swift */,
 				2E1837B491A24AD0B329BACE /* VideoGridCell.swift */,
+				34011F96FCEF45C694C9A221 /* SettingsViewController.swift */,
+				CFD25E85845F49A0AC5F15A3 /* SpeedTestService.swift */,
 				F5742CBE4BAF4617BF32E4A5 /* PlayerView.swift */,
 				F4D986B0D94648C1B2856F29 /* APIClient.swift */,
 				3F95C67503464043B10E1348 /* PreloadCache.swift */,
@@ -188,6 +194,8 @@
 				8C26D442568D4F49B2F03E71 /* VideoCell.swift in Sources */,
 				5AD71A599251415B8A00AA9C /* VideoGridViewController.swift in Sources */,
 				ADF4E492D9DE4D9F99DBBDFA /* VideoGridCell.swift in Sources */,
+				D89D76B9D4104BD2B996F69D /* SettingsViewController.swift in Sources */,
+				B6AFBA687EDA48D19305348B /* SpeedTestService.swift in Sources */,
 				6A2C2379B7DB41B4BF2DF1D8 /* PlayerView.swift in Sources */,
 				516BA9D668C64724907C3910 /* APIClient.swift in Sources */,
 				807C75FD9F944112BF3A1DCB /* PreloadCache.swift in Sources */,

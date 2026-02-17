@@ -62,6 +62,12 @@ final class ConnectViewController: UIViewController {
         updateFieldHints()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        loadSavedValues()
+        updateFieldHints()
+    }
+
     private func configureField(_ field: UITextField, placeholder: String) {
         field.placeholder = placeholder
         field.backgroundColor = UIColor(white: 0.12, alpha: 1)

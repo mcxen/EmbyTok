@@ -24,6 +24,8 @@ interface VideoFeedProps {
   forceSwipeAutoplay?: boolean;
 }
 
+const PREFETCH_AHEAD = 5;
+
 const VideoFeed: React.FC<VideoFeedProps> = ({ 
     videos, 
     client, 
@@ -43,6 +45,7 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
     forceSwipeAutoplay = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const prefetchPoolRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [showToast, setShowToast] = useState(false);
   const isFirstRender = useRef(true);
@@ -54,6 +57,76 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
         isFirstRender.current = false;
     }
   }, [initialIndex]);
+
+  const clearPrefetchPool = () => {
+    prefetchPoolRef.current.forEach((video) => {
+      video.removeAttribute('src');
+      try {
+        video.load();
+      } catch {
+        // Ignore abort errors during cleanup.
+      }
+    });
+    prefetchPoolRef.current.clear();
+  };
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    if (videos.length === 0) {
+      clearPrefetchPool();
+      return;
+    }
+
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+
+    if (connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g') {
+      clearPrefetchPool();
+      return;
+    }
+
+    const start = activeIndex + 1;
+    const end = Math.min(videos.length, start + PREFETCH_AHEAD);
+    const nextIds = new Set<string>();
+
+    for (let index = start; index < end; index += 1) {
+      const item = videos[index];
+      if (!item) continue;
+      const url = client.getVideoUrl(item);
+      if (!url) continue;
+      nextIds.add(item.Id);
+
+      if (!prefetchPoolRef.current.has(item.Id)) {
+        const prefetchVideo = document.createElement('video');
+        prefetchVideo.preload = 'auto';
+        prefetchVideo.muted = true;
+        prefetchVideo.playsInline = true;
+        prefetchVideo.src = url;
+        prefetchVideo.load();
+        prefetchPoolRef.current.set(item.Id, prefetchVideo);
+      }
+    }
+
+    for (const [id, video] of prefetchPoolRef.current.entries()) {
+      if (!nextIds.has(id)) {
+        video.removeAttribute('src');
+        try {
+          video.load();
+        } catch {
+          // Ignore abort errors during cleanup.
+        }
+        prefetchPoolRef.current.delete(id);
+      }
+    }
+  }, [activeIndex, videos, client]);
+
+  useEffect(() => {
+    return () => {
+      clearPrefetchPool();
+    };
+  }, []);
 
   // Handle AutoPlay Toast Notification (Global for the feed)
   useEffect(() => {

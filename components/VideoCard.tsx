@@ -73,6 +73,16 @@ const VideoCard: React.FC<VideoCardProps> = ({
     : undefined;
     
   const isContentLandscape = (item.Width || 0) > (item.Height || 0);
+  const syncMuteState = (video: HTMLVideoElement | null) => {
+      if (!video) return;
+      const targetMuted = isMuted;
+      if (video.muted !== targetMuted) {
+          video.muted = targetMuted;
+      }
+      if (!targetMuted && video.volume === 0) {
+          video.volume = 1;
+      }
+  };
 
   useEffect(() => {
       const handleResize = () => {
@@ -92,7 +102,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
     const video = videoRef.current;
     if (!video) return;
     
-    video.muted = isMuted;
+    syncMuteState(video);
 
     const clearPlayRetry = () => {
       if (playRetryTimerRef.current !== null) {
@@ -130,9 +140,6 @@ const VideoCard: React.FC<VideoCardProps> = ({
           ) {
             autoplayMutedFallbackRef.current = true;
             videoRef.current.muted = true;
-            if (!isMuted) {
-              onToggleMute();
-            }
           }
 
           if (forceSwipeAutoplay && attempt < 4) {
@@ -183,6 +190,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
   };
 
   const handlePlaying = () => {
+      syncMuteState(videoRef.current);
       setIsPlaying(true);
       setHasStarted(true); 
   };
@@ -358,12 +366,12 @@ const VideoCard: React.FC<VideoCardProps> = ({
       return `${minutes} 分钟`;
   }
 
-  const showBlurBackground = isScreenLandscape && !isContentLandscape;
-  
-  const videoObjectFitClass = (isNarrowViewport || isScreenLandscape || isContentLandscape) 
-      ? 'object-contain' 
-      : 'object-cover';
   const isVideoRotated = rotationDeg % 180 !== 0;
+  const showBlurBackground = !isVideoRotated && isScreenLandscape && !isContentLandscape;
+
+  const shouldCover =
+      !isVideoRotated && !isNarrowViewport && !isScreenLandscape && !isContentLandscape;
+  const videoObjectFitClass = shouldCover ? 'object-cover' : 'object-contain';
   const rotatedVideoStyle: React.CSSProperties = isVideoRotated
       ? {
           transform: `rotate(${rotationDeg}deg)`,

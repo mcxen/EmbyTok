@@ -397,7 +397,7 @@ function App() {
                 )}
             </button>
             <button
-                onClick={() => setIsMuted(!isMuted)}
+                onClick={() => setIsMuted((prev) => !prev)}
                 className="p-2 text-white/80 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full"
             >
                 {isMuted ? (
@@ -452,7 +452,7 @@ function App() {
                 initialIndex={currentIndex}
                 onIndexChange={setCurrentIndex}
                 isMuted={isMuted}
-                onToggleMute={() => setIsMuted(!isMuted)}
+                onToggleMute={() => setIsMuted((prev) => !prev)}
                 feedType={feedType}
                 hasMore={hasMore}
                 onLoadMore={() => loadVideos(false)}

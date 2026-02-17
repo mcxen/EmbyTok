@@ -14,13 +14,19 @@ const PAGE_SIZE = 15;
 function App() {
   const [config, setConfig] = useState<ServerConfig | null>(() => {
     const saved = localStorage.getItem('embyConfig');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) {
+      return null;
+    }
+
+    const parsed = JSON.parse(saved) as ServerConfig;
+    return parsed.serverType === 'local' ? null : parsed;
   });
+  const [localFiles, setLocalFiles] = useState<File[]>([]);
 
   // Client Instance
   const client = useMemo(() => {
-    return config ? ClientFactory.create(config) : null;
-  }, [config]);
+    return config ? ClientFactory.create(config, { localFiles }) : null;
+  }, [config, localFiles]);
 
   const [libraries, setLibraries] = useState<EmbyLibrary[]>([]);
   const [selectedLib, setSelectedLib] = useState<EmbyLibrary | null>(null);
@@ -85,7 +91,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (config) {
+    if (config && config.serverType !== 'local') {
       localStorage.setItem('embyConfig', JSON.stringify(config));
     } else {
       localStorage.removeItem('embyConfig');
@@ -237,9 +243,26 @@ function App() {
 
   const handleLogout = () => {
       setConfig(null);
+      setLocalFiles([]);
       localStorage.removeItem('embyConfig');
       setVideos([]);
+      setLibraries([]);
+      setSelectedLib(null);
+      setFavoriteIds(new Set());
       setIsMenuOpen(false);
+  };
+
+  const handleLogin = (nextConfig: ServerConfig, files?: File[]) => {
+      setConfig(nextConfig);
+      setSelectedLib(null);
+      setVideos([]);
+      setLibraries([]);
+      setFavoriteIds(new Set());
+      if (nextConfig.serverType === 'local') {
+          setLocalFiles(files || []);
+      } else {
+          setLocalFiles([]);
+      }
   };
 
   const toggleFullScreen = () => {
@@ -255,7 +278,7 @@ function App() {
   };
 
   if (!config || !client) {
-    return <Login onLogin={setConfig} />;
+    return <Login onLogin={handleLogin} />;
   }
 
   return (

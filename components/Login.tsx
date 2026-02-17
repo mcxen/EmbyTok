@@ -1,12 +1,38 @@
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ServerConfig, ServerType } from '../types';
 import { ClientFactory } from '../services/clientFactory';
-import { Server, User, Key, Loader2, Info, MonitorPlay } from 'lucide-react';
+import { Server, User, Key, Loader2, Info, FolderOpen } from 'lucide-react';
 
 interface LoginProps {
-  onLogin: (config: ServerConfig) => void;
+  onLogin: (config: ServerConfig, localFiles?: File[]) => void;
 }
+
+const LOCAL_VIDEO_EXTENSIONS = new Set([
+  'mp4',
+  'mkv',
+  'avi',
+  'mov',
+  'webm',
+  'm4v',
+  'flv',
+  'wmv',
+  'ts',
+  'm2ts',
+  '3gp',
+]);
+
+const isVideoFile = (file: File) => {
+  if (file.type.startsWith('video/')) {
+    return true;
+  }
+  const lastDot = file.name.lastIndexOf('.');
+  if (lastDot < 0) {
+    return false;
+  }
+  const ext = file.name.slice(lastDot + 1).toLowerCase();
+  return LOCAL_VIDEO_EXTENSIONS.has(ext);
+};
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [serverType, setServerType] = useState<ServerType>('emby');
@@ -15,9 +41,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const isLocalMode = serverType === 'local';
+
+  const getLocalConfig = (): ServerConfig => ({
+    url: 'local://folder',
+    username: 'Local Folder',
+    token: '',
+    userId: 'local-user',
+    serverType: 'local',
+  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLocalMode) {
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -40,6 +80,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
   };
 
+  const handlePickLocalFolder = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError('');
+    const files = Array.from(e.target.files || []);
+    const videoFiles = files.filter(isVideoFile);
+
+    if (videoFiles.length === 0) {
+      setError('选择的文件夹中没有可用视频文件。');
+      return;
+    }
+
+    onLogin(getLocalConfig(), videoFiles);
+    e.target.value = '';
+  };
+
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white">
       <div className="w-full max-w-sm space-y-8">
@@ -53,7 +107,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <form onSubmit={handleLogin} className="space-y-4 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
           
           {/* Server Type Selector */}
-          <div className="flex bg-zinc-800 rounded-lg p-1 mb-4">
+          <div className="flex bg-zinc-800 rounded-lg p-1 mb-4 gap-1">
               <button 
                 type="button"
                 onClick={() => setServerType('emby')}
@@ -68,51 +122,86 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               >
                   Plex
               </button>
+              <button
+                type="button"
+                onClick={() => setServerType('local')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-bold transition-all focus:ring-2 focus:ring-indigo-500 outline-none ${serverType === 'local' ? 'bg-emerald-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                  本地
+              </button>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-400 uppercase">服务器地址</label>
-            <div className="relative">
-                <Server className="absolute left-3 top-3 w-5 h-5 text-zinc-500" />
-                <input
-                type="text"
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                placeholder={serverType === 'plex' ? 'http://192.168.1.10:32400' : 'http://192.168.1.100:8096'}
-                className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
-                required
-                />
-            </div>
-          </div>
+          {!isLocalMode ? (
+            <>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-zinc-400 uppercase">服务器地址</label>
+                <div className="relative">
+                    <Server className="absolute left-3 top-3 w-5 h-5 text-zinc-500" />
+                    <input
+                    type="text"
+                    value={serverUrl}
+                    onChange={(e) => setServerUrl(e.target.value)}
+                    placeholder={serverType === 'plex' ? 'http://192.168.1.10:32400' : 'http://192.168.1.100:8096'}
+                    className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    required
+                    />
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-400 uppercase">用户名</label>
-            <div className="relative">
-                <User className="absolute left-3 top-3 w-5 h-5 text-zinc-500" />
-                <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={serverType === 'plex' ? '可选 (默认 User)' : 'User'}
-                className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
-                required={serverType === 'emby'}
-                />
-            </div>
-          </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-zinc-400 uppercase">用户名</label>
+                <div className="relative">
+                    <User className="absolute left-3 top-3 w-5 h-5 text-zinc-500" />
+                    <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={serverType === 'plex' ? '可选 (默认 User)' : 'User'}
+                    className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    required={serverType === 'emby'}
+                    />
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-400 uppercase">{serverType === 'plex' ? 'X-Plex-Token / 密码' : '密码'}</label>
-             <div className="relative">
-                <Key className="absolute left-3 top-3 w-5 h-5 text-zinc-500" />
-                <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={serverType === 'plex' ? '必填' : '可选'}
-                className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-zinc-400 uppercase">{serverType === 'plex' ? 'X-Plex-Token / 密码' : '密码'}</label>
+                 <div className="relative">
+                    <Key className="absolute left-3 top-3 w-5 h-5 text-zinc-500" />
+                    <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={serverType === 'plex' ? '必填' : '可选'}
+                    className="w-full bg-zinc-800 border-none rounded-xl py-3 pl-10 text-white placeholder-zinc-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-400 uppercase">本地视频文件夹</label>
+              <input
+                ref={folderInputRef}
+                type="file"
+                multiple
+                accept="video/*"
+                onChange={handlePickLocalFolder}
+                className="hidden"
+                {...({ webkitdirectory: '', directory: '' } as any)}
+              />
+              <button
+                type="button"
+                onClick={() => folderInputRef.current?.click()}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white outline-none"
+              >
+                <FolderOpen className="w-5 h-5" />
+                选择文件夹并加载
+              </button>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                会读取你选择目录及其子目录中的全部视频文件（浏览器需支持目录上传）。
+              </p>
             </div>
-          </div>
+          )}
 
           {error && (
             <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm flex gap-2">
@@ -121,17 +210,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white outline-none ${serverType === 'plex' ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : '连接'}
-          </button>
+          {!isLocalMode && (
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white outline-none ${serverType === 'plex' ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : '连接'}
+            </button>
+          )}
         </form>
         
         <div className="text-center text-xs text-zinc-600 px-4">
-            <p>EmbyTok 是非官方客户端。支持 Emby、Jellyfin 和 Plex 服务端。</p>
+            <p>EmbyTok 是非官方客户端。支持 Emby、Jellyfin、Plex 和本地文件夹模式。</p>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { EmbyItem } from '../types';
 import { MediaClient } from '../services/MediaClient';
-import { Play, AlertCircle, Heart, Info, Disc, ChevronsRight, Rewind, FastForward, Zap, Infinity } from 'lucide-react';
+import { Play, Pause, AlertCircle, Heart, Info, Disc, ChevronsRight, Rewind, FastForward, Zap, Infinity } from 'lucide-react';
 
 interface VideoCardProps {
   item: EmbyItem;
@@ -56,6 +56,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
   const isDragging = useRef(false);
   const isLongPress = useRef(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ignoreNextClickRef = useRef(false);
 
   const videoSrc = client.getVideoUrl(item);
   const posterSrc = item.ImageTags?.Primary 
@@ -132,7 +133,8 @@ const VideoCard: React.FC<VideoCardProps> = ({
 
   const handleLoadedMetadata = () => {
       if (videoRef.current) {
-          setDuration(videoRef.current.duration);
+          const nextDuration = Number.isFinite(videoRef.current.duration) ? videoRef.current.duration : 0;
+          setDuration(nextDuration);
       }
   };
 
@@ -187,24 +189,26 @@ const VideoCard: React.FC<VideoCardProps> = ({
       setIsSeeking(true);
   };
 
-  const handleSeekMove = (e: React.TouchEvent | React.MouseEvent) => {
-      e.stopPropagation();
-      if (!isSeeking || !containerRef.current) return;
-      
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const rect = containerRef.current.getBoundingClientRect();
-      const percent = Math.max(0, Math.min(1, clientX / rect.width));
-      setCurrentTime(percent * duration);
-  };
-
   const handleSeekEnd = (e: React.TouchEvent | React.MouseEvent) => {
       e.stopPropagation();
-      if (!isSeeking) return;
-      
       setIsSeeking(false);
+  };
+
+  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      e.stopPropagation();
+      const nextTime = Number(e.target.value);
+      setCurrentTime(nextTime);
       if (videoRef.current) {
-          videoRef.current.currentTime = currentTime;
+          videoRef.current.currentTime = nextTime;
       }
+  };
+
+  const handleContainerClick = () => {
+      if (ignoreNextClickRef.current) {
+          ignoreNextClickRef.current = false;
+          return;
+      }
+      togglePlay();
   };
 
   // --- Gesture Handlers ---
@@ -249,6 +253,8 @@ const VideoCard: React.FC<VideoCardProps> = ({
           longPressTimer.current = null;
       }
 
+      ignoreNextClickRef.current = true;
+
       const deltaX = e.changedTouches[0].clientX - touchStartX.current;
       const deltaY = e.changedTouches[0].clientY - touchStartY.current;
 
@@ -281,9 +287,8 @@ const VideoCard: React.FC<VideoCardProps> = ({
   const videoObjectFitClass = (isScreenLandscape || isContentLandscape) 
       ? 'object-contain' 
       : 'object-cover';
-
-  // Only show progress bar for videos longer than 3 minutes, AND when NOT in AutoPlay mode
-  const showProgressBar = duration > 180 && !isAutoPlay;
+  const safeDuration = Number.isFinite(duration) ? duration : 0;
+  const safeCurrentTime = Math.min(currentTime, safeDuration);
 
   // Render UI elements only if NOT in AutoPlay (Pure) Mode
   const renderUI = !isAutoPlay;
@@ -296,6 +301,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onClick={handleContainerClick}
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
     >
@@ -337,8 +343,8 @@ const VideoCard: React.FC<VideoCardProps> = ({
 
       {/* Play/Pause Overlay Icon */}
       {!isPlaying && !error && !seekOffset && !isLongPress.current && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20 z-20">
-          <Play className="w-16 h-16 text-white/50 fill-white/50" />
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+          <Play className="w-16 h-16 text-white/40 fill-white/20" />
         </div>
       )}
 
@@ -483,24 +489,37 @@ const VideoCard: React.FC<VideoCardProps> = ({
       )}
 
       {/* Progress Bar (Conditional) */}
-      {showProgressBar && duration > 0 && (
-          <div 
-            className="absolute bottom-8 left-4 right-4 h-8 flex items-center z-50 pointer-events-auto touch-none"
-            onTouchStart={handleSeekStart}
-            onTouchMove={handleSeekMove}
-            onTouchEnd={handleSeekEnd}
-            onClick={(e) => e.stopPropagation()} 
+      {renderUI && safeDuration > 0 && (
+          <div
+            className="absolute left-0 right-0 bottom-0 px-3 pb-2 z-50 pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={stopProp}
+            onMouseDown={stopProp}
           >
-              <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden relative">
-                  <div 
-                      className="h-full bg-indigo-500 transition-all duration-75"
-                      style={{ width: `${(currentTime / duration) * 100}%` }}
+              <div className="flex items-center gap-2">
+                  <button
+                    onTouchStart={stopProp}
+                    onMouseDown={stopProp}
+                    onTouchEnd={(e) => handleButtonAction(e, togglePlay)}
+                    onClick={(e) => handleButtonAction(e, togglePlay)}
+                    className="p-1.5 rounded-full text-white/65 hover:text-white transition-colors bg-transparent focus:ring-2 focus:ring-white/40 outline-none"
+                  >
+                      {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={safeDuration}
+                    step={0.01}
+                    value={safeCurrentTime}
+                    onChange={handleSeekChange}
+                    onMouseDown={handleSeekStart}
+                    onMouseUp={handleSeekEnd}
+                    onTouchStart={handleSeekStart}
+                    onTouchEnd={handleSeekEnd}
+                    className="embytok-progress-slider"
                   />
               </div>
-               <div 
-                    className="absolute w-4 h-4 bg-white rounded-full shadow-lg transform -translate-x-2"
-                    style={{ left: `${(currentTime / duration) * 100}%` }}
-               />
           </div>
       )}
     </div>

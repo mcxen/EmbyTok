@@ -171,8 +171,8 @@ export class LocalClient extends MediaClient {
   }
 
   private getRelativePath(file: File): string {
-    const fileWithPath = file as File & { webkitRelativePath?: string };
-    return fileWithPath.webkitRelativePath || file.name;
+    const fileWithPath = file as File & { webkitRelativePath?: string; relativePath?: string };
+    return fileWithPath.webkitRelativePath || fileWithPath.relativePath || file.name;
   }
 
   private buildItemId(relativePath: string, file: File): string {

@@ -6,10 +6,22 @@ import VideoGrid from './components/VideoGrid';
 import LibrarySelect from './components/LibrarySelect';
 import { ServerConfig, EmbyLibrary, EmbyItem, FeedType, OrientationMode } from './types';
 import { ClientFactory } from './services/clientFactory';
+import {
+  getStartupDirectoryHandle,
+  loadVideoFilesFromDirectory,
+  queryDirectoryPermission,
+} from './services/localFolderService';
 import { Menu, LayoutGrid, Smartphone, Volume2, VolumeX, Maximize, Minimize } from 'lucide-react';
 
 type ViewMode = 'feed' | 'grid';
 const PAGE_SIZE = 15;
+const LOCAL_CONFIG: ServerConfig = {
+  url: 'local://folder',
+  username: 'Local Folder',
+  token: '',
+  userId: 'local-user',
+  serverType: 'local',
+};
 
 function App() {
   const [config, setConfig] = useState<ServerConfig | null>(() => {
@@ -22,6 +34,7 @@ function App() {
     return parsed.serverType === 'local' ? null : parsed;
   });
   const [localFiles, setLocalFiles] = useState<File[]>([]);
+  const [isBootstrappingLocal, setIsBootstrappingLocal] = useState(() => !config);
 
   // Client Instance
   const client = useMemo(() => {
@@ -105,6 +118,50 @@ function App() {
   useEffect(() => {
       localStorage.setItem('embyOrientationMode', orientationMode);
   }, [orientationMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapStartupFolder = async () => {
+      if (config) {
+        setIsBootstrappingLocal(false);
+        return;
+      }
+
+      try {
+        const handle = await getStartupDirectoryHandle();
+        if (!handle) {
+          return;
+        }
+
+        const permission = await queryDirectoryPermission(handle);
+        if (permission !== 'granted') {
+          return;
+        }
+
+        const files = await loadVideoFilesFromDirectory(handle);
+        if (files.length === 0) {
+          return;
+        }
+
+        if (!cancelled) {
+          setLocalFiles(files);
+          setConfig(LOCAL_CONFIG);
+        }
+      } catch (error) {
+        console.error('Failed to load startup local folder', error);
+      } finally {
+        if (!cancelled) {
+          setIsBootstrappingLocal(false);
+        }
+      }
+    };
+
+    bootstrapStartupFolder();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (client) {
@@ -253,16 +310,17 @@ function App() {
   };
 
   const handleLogin = (nextConfig: ServerConfig, files?: File[]) => {
-      setConfig(nextConfig);
-      setSelectedLib(null);
-      setVideos([]);
-      setLibraries([]);
-      setFavoriteIds(new Set());
       if (nextConfig.serverType === 'local') {
           setLocalFiles(files || []);
       } else {
           setLocalFiles([]);
       }
+      setConfig(nextConfig);
+      setSelectedLib(null);
+      setVideos([]);
+      setLibraries([]);
+      setFavoriteIds(new Set());
+      setIsBootstrappingLocal(false);
   };
 
   const toggleFullScreen = () => {
@@ -278,6 +336,13 @@ function App() {
   };
 
   if (!config || !client) {
+    if (isBootstrappingLocal) {
+      return (
+        <div className="min-h-screen bg-black flex items-center justify-center text-zinc-300">
+          正在加载启动目录...
+        </div>
+      );
+    }
     return <Login onLogin={handleLogin} />;
   }
 

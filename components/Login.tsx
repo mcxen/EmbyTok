@@ -1,8 +1,18 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ServerConfig, ServerType } from '../types';
 import { ClientFactory } from '../services/clientFactory';
 import { Server, User, Key, Loader2, Info, FolderOpen } from 'lucide-react';
+import {
+  clearStartupDirectoryHandle,
+  getStartupDirectoryHandle,
+  isStartupFolderSupported,
+  loadVideoFilesFromDirectory,
+  pickDirectoryHandle,
+  queryDirectoryPermission,
+  requestDirectoryPermission,
+  saveStartupDirectoryHandle,
+} from '../services/localFolderService';
 
 interface LoginProps {
   onLogin: (config: ServerConfig, localFiles?: File[]) => void;
@@ -40,9 +50,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
   const [error, setError] = useState('');
+  const [hasStartupFolder, setHasStartupFolder] = useState(false);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const isLocalMode = serverType === 'local';
+  const supportsStartupFolder = isStartupFolderSupported();
 
   const getLocalConfig = (): ServerConfig => ({
     url: 'local://folder',
@@ -80,17 +93,115 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!supportsStartupFolder) {
+      return;
+    }
+
+    getStartupDirectoryHandle()
+      .then((handle) => {
+        if (!cancelled) {
+          setHasStartupFolder(!!handle);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHasStartupFolder(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supportsStartupFolder]);
+
+  const loadFromDirectoryHandle = async (handle: any, persistAsStartup: boolean) => {
+    setError('');
+    setLocalLoading(true);
+    try {
+      let permission = await queryDirectoryPermission(handle);
+      if (permission !== 'granted') {
+        permission = await requestDirectoryPermission(handle);
+      }
+      if (permission !== 'granted') {
+        setError('未授予目录读取权限，无法加载本地视频。');
+        return;
+      }
+
+      const files = await loadVideoFilesFromDirectory(handle);
+      if (files.length === 0) {
+        setError('选择的文件夹中没有可用视频文件。');
+        return;
+      }
+
+      if (persistAsStartup) {
+        await saveStartupDirectoryHandle(handle);
+        setHasStartupFolder(true);
+      }
+
+      onLogin(getLocalConfig(), files);
+    } catch (err) {
+      console.error(err);
+      setError('读取本地目录失败，请重试。');
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  const handleConfigureStartupFolder = async () => {
+    try {
+      const handle = await pickDirectoryHandle();
+      if (!handle) {
+        return;
+      }
+      await loadFromDirectoryHandle(handle, true);
+    } catch (err) {
+      console.error(err);
+      setError('打开目录选择器失败，请确认浏览器支持该功能。');
+    }
+  };
+
+  const handleLoadStartupFolder = async () => {
+    try {
+      const handle = await getStartupDirectoryHandle();
+      if (!handle) {
+        setError('未找到已配置的启动目录。');
+        setHasStartupFolder(false);
+        return;
+      }
+      await loadFromDirectoryHandle(handle, false);
+    } catch (err) {
+      console.error(err);
+      setError('读取启动目录失败。');
+    }
+  };
+
+  const handleClearStartupFolder = async () => {
+    try {
+      await clearStartupDirectoryHandle();
+      setHasStartupFolder(false);
+      setError('');
+    } catch (err) {
+      console.error(err);
+      setError('清除启动目录配置失败。');
+    }
+  };
+
   const handlePickLocalFolder = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError('');
+    setLocalLoading(true);
     const files = Array.from(e.target.files || []);
     const videoFiles = files.filter(isVideoFile);
 
     if (videoFiles.length === 0) {
       setError('选择的文件夹中没有可用视频文件。');
+      setLocalLoading(false);
       return;
     }
 
     onLogin(getLocalConfig(), videoFiles);
+    setLocalLoading(false);
     e.target.value = '';
   };
 
@@ -180,6 +291,41 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           ) : (
             <div className="space-y-2">
               <label className="text-xs font-medium text-zinc-400 uppercase">本地视频文件夹</label>
+              {supportsStartupFolder && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleConfigureStartupFolder}
+                    disabled={localLoading}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white outline-none"
+                  >
+                    {localLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
+                    选择并设为启动目录
+                  </button>
+
+                  {hasStartupFolder && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleLoadStartupFolder}
+                        disabled={localLoading}
+                        className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-all text-sm"
+                      >
+                        使用已配置启动目录
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearStartupFolder}
+                        disabled={localLoading}
+                        className="px-3 py-2.5 text-xs rounded-lg border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-60"
+                      >
+                        清除
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
               <input
                 ref={folderInputRef}
                 type="file"
@@ -192,13 +338,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <button
                 type="button"
                 onClick={() => folderInputRef.current?.click()}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white outline-none"
+                disabled={localLoading}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white outline-none"
               >
-                <FolderOpen className="w-5 h-5" />
-                选择文件夹并加载
+                {localLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
+                仅本次加载文件夹
               </button>
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                会读取你选择目录及其子目录中的全部视频文件（浏览器需支持目录上传）。
+                {supportsStartupFolder
+                  ? '支持配置启动目录：下次打开网页会自动加载（已授权时）。'
+                  : '会读取你选择目录及其子目录中的全部视频文件（浏览器需支持目录上传）。'}
               </p>
             </div>
           )}

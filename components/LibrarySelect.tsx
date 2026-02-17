@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { EmbyLibrary, OrientationMode } from '../types';
+import { EmbyLibrary, FeedType, OrientationMode } from '../types';
 import { X, Folder, Settings, LogOut, Eye, EyeOff, ChevronLeft, Server, User, Smartphone, Monitor } from 'lucide-react';
 
 interface LibrarySelectProps {
@@ -16,6 +16,11 @@ interface LibrarySelectProps {
   onLogout: () => void;
   serverUrl: string;
   username: string;
+
+  feedType: FeedType;
+  onFeedTypeChange: (type: FeedType) => void;
+  showFeedControls?: boolean;
+  onOpenSpeedTest?: () => void;
   
   orientationMode: OrientationMode;
   onOrientationChange: (mode: OrientationMode) => void;
@@ -35,12 +40,16 @@ const LibrarySelect: React.FC<LibrarySelectProps> = ({
     hiddenLibIds,
     onToggleHidden,
     onLogout,
-    serverUrl,
-    username,
-    orientationMode,
-    onOrientationChange,
-    isFolderServer = false,
-    onOpenAdminPanel
+  serverUrl,
+  username,
+  feedType,
+  onFeedTypeChange,
+  showFeedControls = false,
+  onOpenSpeedTest,
+  orientationMode,
+  onOrientationChange,
+  isFolderServer = false,
+  onOpenAdminPanel
 }) => {
   const [mode, setMode] = useState<MenuMode>('list');
 
@@ -62,6 +71,17 @@ const LibrarySelect: React.FC<LibrarySelectProps> = ({
           return;
       }
       onOpenAdminPanel();
+      onClose();
+  };
+
+  const handleFeedSelect = (type: FeedType) => {
+      onFeedTypeChange(type);
+      onClose();
+  };
+
+  const handleOpenSpeedTest = () => {
+      if (!onOpenSpeedTest) return;
+      onOpenSpeedTest();
       onClose();
   };
 
@@ -93,6 +113,31 @@ const LibrarySelect: React.FC<LibrarySelectProps> = ({
           {/* --- LIST MODE --- */}
           {mode === 'list' && (
               <>
+                {showFeedControls && (
+                  <div className="px-2 pt-2 pb-3">
+                      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider px-1 mb-2">内容</h3>
+                      <div className="bg-zinc-800 rounded-xl p-1 flex">
+                          <button 
+                            onClick={() => handleFeedSelect('favorites')}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${feedType === 'favorites' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+                          >
+                              收藏
+                          </button>
+                          <button 
+                            onClick={() => handleFeedSelect('random')}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${feedType === 'random' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+                          >
+                              随机
+                          </button>
+                          <button 
+                            onClick={() => handleFeedSelect('latest')}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${feedType === 'latest' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+                          >
+                              最新
+                          </button>
+                      </div>
+                  </div>
+                )}
                 <button
                     onClick={() => {
                         onSelect(null);
@@ -168,6 +213,14 @@ const LibrarySelect: React.FC<LibrarySelectProps> = ({
                           </div>
                           
                           <div className="pt-2 border-t border-zinc-700/50">
+                              {onOpenSpeedTest && (
+                                <button
+                                  onClick={handleOpenSpeedTest}
+                                  className="w-full mb-2 py-2.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                >
+                                  网络测速
+                                </button>
+                              )}
                               {isFolderServer && (
                                 <button
                                   onClick={handleOpenAdmin}

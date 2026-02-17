@@ -5,6 +5,7 @@ import VideoFeed from './components/VideoFeed';
 import VideoGrid from './components/VideoGrid';
 import LibrarySelect from './components/LibrarySelect';
 import FolderServiceAdmin from './components/FolderServiceAdmin';
+import SpeedTestModal from './components/SpeedTestModal';
 import { ServerConfig, EmbyLibrary, EmbyItem, FeedType, OrientationMode } from './types';
 import { ClientFactory } from './services/clientFactory';
 import {
@@ -54,6 +55,7 @@ function App() {
   // UI State
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [isSpeedTestOpen, setIsSpeedTestOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [feedType, setFeedType] = useState<FeedType>('latest');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -62,6 +64,9 @@ function App() {
   // Initial Detection for TV/Landscape
   const [isLandscape, setIsLandscape] = useState(() => 
      typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false
+  );
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+     typeof window !== 'undefined' ? window.innerWidth <= 520 : false
   );
 
   // Orientation Filter State
@@ -77,6 +82,7 @@ function App() {
   
   const [viewMode, setViewMode] = useState<ViewMode>(isLandscape ? 'grid' : 'feed');
   const [currentIndex, setCurrentIndex] = useState(0);
+  const currentVideo = videos[Math.min(currentIndex, Math.max(videos.length - 1, 0))] || null;
   
   // Settings State
   const [hiddenLibIds, setHiddenLibIds] = useState<Set<string>>(() => {
@@ -91,6 +97,7 @@ function App() {
   useEffect(() => {
     const handleResize = () => {
         setIsLandscape(window.innerWidth > window.innerHeight);
+        setIsNarrowViewport(window.innerWidth <= 520);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -362,28 +369,30 @@ function App() {
              <Menu className="w-6 h-6 drop-shadow-md" />
         </button>
 
-        <div className="flex items-center gap-4 font-bold text-md drop-shadow-md transform translate-x-1">
-             <button 
-                onClick={() => handleFeedTypeChange('favorites')}
-                className={`transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2 ${feedType === 'favorites' ? 'text-white scale-105' : 'text-white/50 hover:text-white/80'}`}
-             >
-                 收藏
-             </button>
-             <div className="w-[1px] h-3 bg-white/20"></div>
-             <button 
-                onClick={() => handleFeedTypeChange('random')}
-                className={`transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2 ${feedType === 'random' ? 'text-white scale-105' : 'text-white/50 hover:text-white/80'}`}
-             >
-                 随机
-             </button>
-             <div className="w-[1px] h-3 bg-white/20"></div>
-             <button 
-                onClick={() => handleFeedTypeChange('latest')}
-                className={`transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2 ${feedType === 'latest' ? 'text-white scale-105' : 'text-white/50 hover:text-white/80'}`}
-             >
-                 最新
-             </button>
-        </div>
+        {!isNarrowViewport && (
+          <div className="flex items-center gap-4 font-bold text-md drop-shadow-md transform translate-x-1">
+               <button 
+                  onClick={() => handleFeedTypeChange('favorites')}
+                  className={`transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2 ${feedType === 'favorites' ? 'text-white scale-105' : 'text-white/50 hover:text-white/80'}`}
+               >
+                   收藏
+               </button>
+               <div className="w-[1px] h-3 bg-white/20"></div>
+               <button 
+                  onClick={() => handleFeedTypeChange('random')}
+                  className={`transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2 ${feedType === 'random' ? 'text-white scale-105' : 'text-white/50 hover:text-white/80'}`}
+               >
+                   随机
+               </button>
+               <div className="w-[1px] h-3 bg-white/20"></div>
+               <button 
+                  onClick={() => handleFeedTypeChange('latest')}
+                  className={`transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2 ${feedType === 'latest' ? 'text-white scale-105' : 'text-white/50 hover:text-white/80'}`}
+               >
+                   最新
+               </button>
+          </div>
+        )}
         
         <div className="flex items-center gap-1">
             <button
@@ -474,6 +483,10 @@ function App() {
         onLogout={handleLogout}
         serverUrl={config.url}
         username={config.username}
+        feedType={feedType}
+        onFeedTypeChange={handleFeedTypeChange}
+        showFeedControls={isNarrowViewport}
+        onOpenSpeedTest={() => setIsSpeedTestOpen(true)}
         orientationMode={orientationMode}
         onOrientationChange={setOrientationMode}
         isFolderServer={config.serverType === 'folder'}
@@ -487,6 +500,12 @@ function App() {
         isOpen={isAdminPanelOpen}
         serverUrl={config.url}
         onClose={() => setIsAdminPanelOpen(false)}
+      />
+      <SpeedTestModal
+        isOpen={isSpeedTestOpen}
+        onClose={() => setIsSpeedTestOpen(false)}
+        client={client}
+        sampleItem={currentVideo}
       />
     </div>
   );

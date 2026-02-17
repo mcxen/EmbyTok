@@ -41,6 +41,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [rotationDeg, setRotationDeg] = useState(0);
+  const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
   const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 768 : false
   );
@@ -96,6 +97,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
   useEffect(() => {
       setRotationDeg(0);
       autoplayMutedFallbackRef.current = false;
+      setVideoSize(null);
   }, [item.Id]);
 
   useEffect(() => {
@@ -205,6 +207,11 @@ const VideoCard: React.FC<VideoCardProps> = ({
       if (videoRef.current) {
           const nextDuration = Number.isFinite(videoRef.current.duration) ? videoRef.current.duration : 0;
           setDuration(nextDuration);
+          const nextWidth = videoRef.current.videoWidth;
+          const nextHeight = videoRef.current.videoHeight;
+          if (nextWidth && nextHeight) {
+              setVideoSize({ width: nextWidth, height: nextHeight });
+          }
       }
   };
 
@@ -372,11 +379,26 @@ const VideoCard: React.FC<VideoCardProps> = ({
   const shouldCover =
       !isVideoRotated && !isNarrowViewport && !isScreenLandscape && !isContentLandscape;
   const videoObjectFitClass = shouldCover ? 'object-cover' : 'object-contain';
+
+  const containerWidth = containerRef.current?.clientWidth
+      ?? (typeof window !== 'undefined' ? window.innerWidth : 0);
+  const containerHeight = containerRef.current?.clientHeight
+      ?? (typeof window !== 'undefined' ? window.innerHeight : 0);
+  const baseWidth = videoSize?.width ?? item.Width ?? 0;
+  const baseHeight = videoSize?.height ?? item.Height ?? 0;
+  const canScaleRotated = baseWidth > 0 && baseHeight > 0 && containerWidth > 0 && containerHeight > 0;
+  const rotatedScale = canScaleRotated
+      ? Math.min(containerWidth / baseHeight, containerHeight / baseWidth)
+      : 1;
+
   const rotatedVideoStyle: React.CSSProperties = isVideoRotated
       ? {
           transform: `rotate(${rotationDeg}deg)`,
-          width: '100dvh',
-          height: '100dvw',
+          transformOrigin: 'center center',
+          width: canScaleRotated ? `${Math.round(baseWidth * rotatedScale)}px` : '100%',
+          height: canScaleRotated ? `${Math.round(baseHeight * rotatedScale)}px` : '100%',
+          maxWidth: '100%',
+          maxHeight: '100%',
         }
       : {
           transform: `rotate(${rotationDeg}deg)`,
@@ -417,6 +439,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
         className={`w-full h-full pointer-events-none relative z-10 bg-transparent ${videoObjectFitClass}`}
         style={rotatedVideoStyle}
         src={videoSrc}
+        poster={posterSrc || undefined}
         loop={!isAutoPlay} // Disable loop in AutoPlay mode to trigger onEnded
         playsInline
         autoPlay

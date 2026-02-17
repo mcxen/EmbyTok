@@ -46,6 +46,7 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const prefetchPoolRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const prefetchPosterRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [showToast, setShowToast] = useState(false);
   const isFirstRender = useRef(true);
@@ -68,6 +69,11 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
       }
     });
     prefetchPoolRef.current.clear();
+
+    prefetchPosterRef.current.forEach((image) => {
+      image.removeAttribute('src');
+    });
+    prefetchPosterRef.current.clear();
   };
 
   useEffect(() => {
@@ -107,6 +113,16 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
         prefetchVideo.load();
         prefetchPoolRef.current.set(item.Id, prefetchVideo);
       }
+
+      const posterTag = item.ImageTags?.Primary;
+      if (posterTag && !prefetchPosterRef.current.has(item.Id)) {
+        const posterUrl = client.getImageUrl(item.Id, posterTag, 'Primary');
+        if (posterUrl) {
+          const prefetchImage = new Image();
+          prefetchImage.src = posterUrl;
+          prefetchPosterRef.current.set(item.Id, prefetchImage);
+        }
+      }
     }
 
     for (const [id, video] of prefetchPoolRef.current.entries()) {
@@ -118,6 +134,13 @@ const VideoFeed: React.FC<VideoFeedProps> = ({
           // Ignore abort errors during cleanup.
         }
         prefetchPoolRef.current.delete(id);
+      }
+    }
+
+    for (const [id, image] of prefetchPosterRef.current.entries()) {
+      if (!nextIds.has(id)) {
+        image.removeAttribute('src');
+        prefetchPosterRef.current.delete(id);
       }
     }
   }, [activeIndex, videos, client]);

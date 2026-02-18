@@ -12,6 +12,18 @@ enum ServerType: String, CaseIterable {
     }
 }
 
+enum PlaybackEndAction: String, CaseIterable {
+    case loopCurrent = "loopCurrent"
+    case playNext = "playNext"
+
+    var displayName: String {
+        switch self {
+        case .loopCurrent: return "循环当前"
+        case .playNext: return "下一个"
+        }
+    }
+}
+
 struct ServerConfig {
     let baseURL: URL
     let username: String
@@ -40,4 +52,10 @@ struct VideoPage {
     let items: [VideoItem]
     let totalCount: Int
     let nextStartIndex: Int
+}
+
+struct FavoriteVideoRecord: Hashable {
+    let id: String
+    let title: String
+    let detail: String?
 }

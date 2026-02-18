@@ -4,11 +4,17 @@ import AVFoundation
 final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     static let reuseId = "VideoCell"
     private static let largeVideoThresholdBytes: Int64 = 700 * 1024 * 1024
+    private static let floatingButtonSize: CGFloat = 31
+    private static let floatingIconPointSize: CGFloat = 12
+    private static let floatingStackVerticalOffset: CGFloat = 56
+    private static let overlayAutoHideDelay: TimeInterval = 8
 
     private let playerView = PlayerView()
     private let titleLabel = UILabel()
     private let posterView = UIImageView()
     private let controlsContainer = UIView()
+    private let currentTimeLabel = UILabel()
+    private let totalTimeLabel = UILabel()
     private let playPauseButton = UIButton(type: .system)
     private let progressSlider = UISlider()
     private let floatingStack = UIStackView()
@@ -33,6 +39,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private var rotationAngle: CGFloat = 0
     private var isMuted = false
     private var isPureMode = false
+    private var playbackEndAction: PlaybackEndAction = .loopCurrent
     private var currentRemoteVideoURL: URL?
     private var currentVideoName: String?
     private var isCachingVideo = false
@@ -42,12 +49,17 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private var shouldResumeAfterSeek = false
     private var isFavorite = false
     private var currentVideoSizeBytes: Int64?
+    private var floatingStackCenterYConstraint: NSLayoutConstraint?
+    private var pureModeBottomConstraint: NSLayoutConstraint?
+    private var overlayHideWorkItem: DispatchWorkItem?
+    private var playbackToken = UUID()
 
     var onToggleMute: (() -> Void)?
     var onTogglePureMode: (() -> Void)?
     var onCacheStateChanged: (() -> Void)?
     var onToggleFavorite: ((Bool) -> Void)?
     var onRandomRequested: (() -> Void)?
+    var onPlaybackEnded: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -80,9 +92,22 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         controlsContainer.layer.cornerRadius = 14
         controlsContainer.clipsToBounds = true
 
+        currentTimeLabel.textColor = UIColor(white: 0.92, alpha: 1)
+        currentTimeLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        currentTimeLabel.textAlignment = .left
+        currentTimeLabel.text = "00:00"
+        currentTimeLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        totalTimeLabel.textColor = UIColor(white: 0.92, alpha: 1)
+        totalTimeLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        totalTimeLabel.textAlignment = .right
+        totalTimeLabel.text = "00:00"
+        totalTimeLabel.translatesAutoresizingMaskIntoConstraints = false
+
         playPauseButton.tintColor = .white
         playPauseButton.setImage(UIImage(systemName: "pause.fill"), for: .normal)
         playPauseButton.addTarget(self, action: #selector(togglePlayPause), for: .touchUpInside)
+        playPauseButton.isHidden = true
 
         progressSlider.minimumValue = 0
         progressSlider.maximumValue = 1
@@ -96,7 +121,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         floatingStack.axis = .vertical
         floatingStack.alignment = .center
         floatingStack.distribution = .equalSpacing
-        floatingStack.spacing = 14
+        floatingStack.spacing = 10
 
         cacheControlStack.axis = .vertical
         cacheControlStack.alignment = .center
@@ -129,15 +154,17 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         contentView.addSubview(floatingStack)
 
         controlsContainer.addSubview(playPauseButton)
+        controlsContainer.addSubview(currentTimeLabel)
+        controlsContainer.addSubview(totalTimeLabel)
         controlsContainer.addSubview(progressSlider)
         cacheControlStack.addArrangedSubview(cacheButton)
         cacheControlStack.addArrangedSubview(cacheSizeLabel)
         floatingStack.addArrangedSubview(cacheControlStack)
         floatingStack.addArrangedSubview(favoriteButton)
         floatingStack.addArrangedSubview(muteButton)
-        floatingStack.addArrangedSubview(pureModeButton)
         floatingStack.addArrangedSubview(rotateButton)
         floatingStack.addArrangedSubview(randomButton)
+        contentView.addSubview(pureModeButton)
 
         NSLayoutConstraint.activate([
             playerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -159,22 +186,43 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             controlsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             controlsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             controlsContainer.bottomAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.bottomAnchor, constant: -12),
-            controlsContainer.heightAnchor.constraint(equalToConstant: 40),
+            controlsContainer.heightAnchor.constraint(equalToConstant: 44),
 
             playPauseButton.leadingAnchor.constraint(equalTo: controlsContainer.leadingAnchor, constant: 10),
             playPauseButton.centerYAnchor.constraint(equalTo: controlsContainer.centerYAnchor),
-            playPauseButton.widthAnchor.constraint(equalToConstant: 24),
-            playPauseButton.heightAnchor.constraint(equalToConstant: 24),
+            playPauseButton.widthAnchor.constraint(equalToConstant: 0),
+            playPauseButton.heightAnchor.constraint(equalToConstant: 0),
 
-            progressSlider.leadingAnchor.constraint(equalTo: playPauseButton.trailingAnchor, constant: 10),
-            progressSlider.trailingAnchor.constraint(equalTo: controlsContainer.trailingAnchor, constant: -12),
+            currentTimeLabel.leadingAnchor.constraint(equalTo: controlsContainer.leadingAnchor, constant: 10),
+            currentTimeLabel.centerYAnchor.constraint(equalTo: controlsContainer.centerYAnchor),
+            currentTimeLabel.widthAnchor.constraint(equalToConstant: 42),
+
+            totalTimeLabel.trailingAnchor.constraint(equalTo: controlsContainer.trailingAnchor, constant: -10),
+            totalTimeLabel.centerYAnchor.constraint(equalTo: controlsContainer.centerYAnchor),
+            totalTimeLabel.widthAnchor.constraint(equalToConstant: 42),
+
+            progressSlider.leadingAnchor.constraint(equalTo: currentTimeLabel.trailingAnchor, constant: 8),
+            progressSlider.trailingAnchor.constraint(equalTo: totalTimeLabel.leadingAnchor, constant: -8),
             progressSlider.centerYAnchor.constraint(equalTo: controlsContainer.centerYAnchor)
         ])
 
+        floatingStackCenterYConstraint = floatingStack.centerYAnchor.constraint(
+            equalTo: contentView.centerYAnchor,
+            constant: Self.floatingStackVerticalOffset
+        )
         NSLayoutConstraint.activate([
             floatingStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
-            floatingStack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+            floatingStackCenterYConstraint!
         ])
+
+        pureModeBottomConstraint = pureModeButton.bottomAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.bottomAnchor, constant: -40)
+        NSLayoutConstraint.activate([
+            pureModeButton.trailingAnchor.constraint(equalTo: floatingStack.trailingAnchor),
+            pureModeBottomConstraint!
+        ])
+
+        controlsContainer.alpha = 0
+        controlsContainer.isHidden = true
 
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tapGesture.cancelsTouchesInView = false
@@ -191,6 +239,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         posterTask?.cancel()
         imageGenerator?.cancelAllCGImageGeneration()
         sizeProbeWorkItem?.cancel()
+        overlayHideWorkItem?.cancel()
     }
 
     override func prepareForReuse() {
@@ -212,8 +261,14 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         cacheInfoToken = UUID()
         sizeProbeWorkItem?.cancel()
         sizeProbeWorkItem = nil
+        overlayHideWorkItem?.cancel()
+        overlayHideWorkItem = nil
         hasRequestedRemoteSize = false
         shouldResumeAfterSeek = false
+        playbackToken = UUID()
+        onPlaybackEnded = nil
+        controlsContainer.alpha = 0
+        controlsContainer.isHidden = true
         cacheSizeLabel.text = "--"
         isFavorite = false
         currentVideoSizeBytes = nil
@@ -222,18 +277,30 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         applyRotation()
     }
 
-    func configure(item: VideoItem, config: ServerConfig, client: APIClient, preloadCache: PreloadCache, isMuted: Bool, isPureMode: Bool, isFavorite: Bool) {
+    func configure(
+        item: VideoItem,
+        config: ServerConfig,
+        client: APIClient,
+        preloadCache: PreloadCache,
+        isMuted: Bool,
+        isPureMode: Bool,
+        isFavorite: Bool,
+        playbackEndAction: PlaybackEndAction
+    ) {
         stopPlayback()
         posterTask?.cancel()
         posterTask = nil
         imageGenerator?.cancelAllCGImageGeneration()
         imageGenerator = nil
+        playbackToken = UUID()
+        let currentPlaybackToken = playbackToken
 
         titleLabel.text = item.name
         hasRenderedFirstFrame = false
         rotationAngle = 0
         self.isMuted = isMuted
         self.isPureMode = isPureMode
+        self.playbackEndAction = playbackEndAction
         applyPureMode(isPureMode)
         applyRotation()
         progressSlider.value = 0
@@ -247,9 +314,13 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         cacheInfoToken = UUID()
         sizeProbeWorkItem?.cancel()
         sizeProbeWorkItem = nil
+        overlayHideWorkItem?.cancel()
+        overlayHideWorkItem = nil
         hasRequestedRemoteSize = false
         shouldResumeAfterSeek = false
         updateFavoriteIcon()
+        currentTimeLabel.text = "00:00"
+        totalTimeLabel.text = "00:00"
 
         var resolvedPlayerItem: AVPlayerItem?
         if let remoteVideoURL, let localURL = VideoDiskCache.shared.cachedFileURL(for: remoteVideoURL) {
@@ -280,6 +351,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             posterTask = URLSession.shared.dataTask(with: posterURL) { [weak self] data, _, _ in
                 guard let self = self, let data = data, let image = UIImage(data: data) else { return }
                 DispatchQueue.main.async {
+                    guard self.playbackToken == currentPlaybackToken else { return }
                     self.posterView.image = image
                 }
             }
@@ -287,9 +359,9 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         } else if let remoteVideoURL {
             posterView.isHidden = false
             if let localURL = VideoDiskCache.shared.cachedFileURL(for: remoteVideoURL) {
-                generateThumbnail(from: localURL)
+                generateThumbnail(from: localURL, token: currentPlaybackToken)
             } else if !isLargeCurrentVideo() {
-                generateThumbnail(from: remoteVideoURL)
+                generateThumbnail(from: remoteVideoURL, token: currentPlaybackToken)
             }
         } else {
             posterView.isHidden = true
@@ -311,22 +383,33 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             updateMuteIcon()
         }
 
+        if isPureMode {
+            hidePlaybackOverlay(animated: false)
+        } else {
+            showPlaybackOverlay(animated: false, autoHide: false)
+        }
+
         if posterView.image == nil, let remoteVideoURL {
             if let localURL = VideoDiskCache.shared.cachedFileURL(for: remoteVideoURL) {
-                generateThumbnail(from: localURL)
+                generateThumbnail(from: localURL, token: currentPlaybackToken)
             } else if !isLargeCurrentVideo() {
-                generateThumbnail(from: remoteVideoURL)
+                generateThumbnail(from: remoteVideoURL, token: currentPlaybackToken)
             }
         }
     }
 
     func startPlayback() {
-        if posterView.image != nil && !playerView.playerLayer.isReadyForDisplay {
+        if !hasRenderedFirstFrame, posterView.image != nil && !playerView.playerLayer.isReadyForDisplay {
             posterView.isHidden = false
         }
         player?.playImmediately(atRate: 1.0)
         scheduleDeferredSizeProbeIfNeeded()
         updatePlayPauseIcon()
+        if isPureMode {
+            hidePlaybackOverlay(animated: false)
+        } else {
+            showPlaybackOverlay(animated: false, autoHide: false)
+        }
     }
 
     func stopPlayback() {
@@ -334,6 +417,8 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         updatePlayPauseIcon()
         detachTimeObserver()
         detachLoopObserver()
+        overlayHideWorkItem?.cancel()
+        overlayHideWorkItem = nil
         displayObserver?.invalidate()
         displayObserver = nil
         playerView.player = nil
@@ -367,10 +452,30 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     func applyPureMode(_ pure: Bool) {
         isPureMode = pure
         titleLabel.isHidden = pure
-        controlsContainer.isHidden = pure
-        floatingStack.alpha = pure ? 0.7 : 1.0
+        if pure {
+            hidePlaybackOverlay(animated: false)
+        } else {
+            showPlaybackOverlay(animated: false, autoHide: false)
+        }
+        cacheControlStack.isHidden = pure
+        favoriteButton.isHidden = pure
+        muteButton.isHidden = pure
+        rotateButton.isHidden = pure
+        randomButton.isHidden = pure
+        floatingStack.isHidden = pure
+        floatingStack.alpha = pure ? 0 : 1.0
         let iconName = pure ? "eye" : "eye.slash"
         pureModeButton.setImage(UIImage(systemName: iconName), for: .normal)
+        pureModeBottomConstraint?.constant = pure ? -40 : -44
+    }
+
+    func applyFavoriteState(_ favorite: Bool) {
+        isFavorite = favorite
+        updateFavoriteIcon()
+    }
+
+    func refreshCacheBadge() {
+        refreshCacheUIForCurrentVideo(fetchRemoteSize: false)
     }
 
     override func layoutSubviews() {
@@ -395,17 +500,24 @@ extension VideoCell {
 
 private extension VideoCell {
     func configureFloatingButton(_ button: UIButton, systemName: String) {
+        let symbolConfig = UIImage.SymbolConfiguration(
+            pointSize: Self.floatingIconPointSize,
+            weight: .semibold,
+            scale: .medium
+        )
+        button.setPreferredSymbolConfiguration(symbolConfig, forImageIn: .normal)
         button.tintColor = .white
         button.setImage(UIImage(systemName: systemName), for: .normal)
         button.backgroundColor = UIColor.black.withAlphaComponent(0.35)
-        button.layer.cornerRadius = 22
+        button.layer.cornerRadius = Self.floatingButtonSize * 0.5
         button.clipsToBounds = true
-        button.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        button.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        button.widthAnchor.constraint(equalToConstant: Self.floatingButtonSize).isActive = true
+        button.heightAnchor.constraint(equalToConstant: Self.floatingButtonSize).isActive = true
     }
 
     @objc func handleTap() {
         togglePlayPause()
+        showPlaybackOverlay(animated: true, autoHide: isPureMode)
     }
 
     @objc func togglePlayPause() {
@@ -437,6 +549,7 @@ private extension VideoCell {
             self.updateDuration()
             if !self.isSeeking {
                 self.progressSlider.value = Float(time.seconds)
+                self.currentTimeLabel.text = self.formattedPlaybackTime(time.seconds)
             }
             self.updatePlayPauseIcon()
         }
@@ -454,6 +567,7 @@ private extension VideoCell {
         let seconds = duration.seconds
         if seconds > 0 {
             progressSlider.maximumValue = Float(seconds)
+            totalTimeLabel.text = formattedPlaybackTime(seconds)
         }
     }
 
@@ -463,12 +577,14 @@ private extension VideoCell {
             || status == .playing
             || status == .waitingToPlayAtSpecifiedRate
         isSeeking = true
+        showPlaybackOverlay(animated: true, autoHide: isPureMode)
     }
 
     @objc func seekValueChanged() {
         guard let player = player else { return }
         let time = CMTime(seconds: Double(progressSlider.value), preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        currentTimeLabel.text = formattedPlaybackTime(time.seconds)
     }
 
     @objc func seekTouchUp() {
@@ -487,7 +603,67 @@ private extension VideoCell {
                 self.updatePlayPauseIcon()
             }
             self.shouldResumeAfterSeek = false
+            self.showPlaybackOverlay(animated: true, autoHide: self.isPureMode)
         }
+    }
+
+    func showPlaybackOverlay(animated: Bool, autoHide: Bool) {
+        overlayHideWorkItem?.cancel()
+        overlayHideWorkItem = nil
+
+        if controlsContainer.isHidden || controlsContainer.alpha < 1 {
+            controlsContainer.isHidden = false
+            if animated {
+                controlsContainer.alpha = 0
+                UIView.animate(withDuration: 0.2) {
+                    self.controlsContainer.alpha = 1
+                }
+            } else {
+                controlsContainer.alpha = 1
+            }
+        }
+
+        if autoHide {
+            schedulePlaybackOverlayHide()
+        }
+    }
+
+    func hidePlaybackOverlay(animated: Bool) {
+        overlayHideWorkItem?.cancel()
+        overlayHideWorkItem = nil
+
+        guard !controlsContainer.isHidden else { return }
+        if animated {
+            UIView.animate(withDuration: 0.2, animations: {
+                self.controlsContainer.alpha = 0
+            }, completion: { _ in
+                self.controlsContainer.isHidden = true
+            })
+        } else {
+            controlsContainer.alpha = 0
+            controlsContainer.isHidden = true
+        }
+    }
+
+    func schedulePlaybackOverlayHide() {
+        overlayHideWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.hidePlaybackOverlay(animated: true)
+        }
+        overlayHideWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.overlayAutoHideDelay, execute: work)
+    }
+
+    func formattedPlaybackTime(_ value: Double) -> String {
+        guard value.isFinite && value >= 0 else { return "00:00" }
+        let totalSeconds = Int(value.rounded(.down))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 
     func attachLoopObserver() {
@@ -498,8 +674,13 @@ private extension VideoCell {
             queue: .main
         ) { [weak self] _ in
             guard let self = self else { return }
-            self.player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
-            self.player?.play()
+            switch self.playbackEndAction {
+            case .loopCurrent:
+                self.player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+                self.player?.play()
+            case .playNext:
+                self.onPlaybackEnded?()
+            }
         }
     }
 
@@ -517,7 +698,7 @@ private extension VideoCell {
             if layer.isReadyForDisplay {
                 self.posterView.isHidden = true
                 self.hasRenderedFirstFrame = true
-            } else if self.posterView.image != nil {
+            } else if !self.hasRenderedFirstFrame, self.posterView.image != nil {
                 self.posterView.isHidden = false
             }
         }
@@ -653,7 +834,7 @@ private extension VideoCell {
         favoriteButton.tintColor = isFavorite ? UIColor.systemPink : UIColor.white
     }
 
-    func generateThumbnail(from url: URL) {
+    func generateThumbnail(from url: URL, token: UUID) {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
@@ -665,6 +846,8 @@ private extension VideoCell {
             guard let self = self, let cgImage = cgImage else { return }
             let image = UIImage(cgImage: cgImage)
             DispatchQueue.main.async {
+                guard self.playbackToken == token else { return }
+                guard !self.hasRenderedFirstFrame, !self.playerView.playerLayer.isReadyForDisplay else { return }
                 if self.posterView.image == nil {
                     self.posterView.image = image
                     self.posterView.isHidden = false

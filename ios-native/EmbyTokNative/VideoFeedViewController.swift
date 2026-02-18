@@ -11,9 +11,10 @@ final class VideoFeedViewController: UIViewController {
     private let preloadCache: PreloadCache
     private var cacheCount: Int
     private var isMuted = true
-    private var isPureMode = false
+    private var isPureMode = true
+    private var playbackEndAction: PlaybackEndAction
     private var favoriteIDs: Set<String>
-    private let speedTestService = SpeedTestService()
+    private weak var activeSettingsViewController: SettingsViewController?
 
     private let collectionView: UICollectionView
     private let spinner = UIActivityIndicatorView(style: .large)
@@ -24,6 +25,7 @@ final class VideoFeedViewController: UIViewController {
     private let initialIndex: Int
 
     private static let cacheCountKey = "embytok.cacheCount"
+    private static let playbackEndActionKey = "embytok.playbackEndAction"
     private static let favoriteIDsKey = "embytok.favoriteIDs"
     private static let forwardPreloadCount = 5
     private static let backwardPreloadCount = 3
@@ -52,6 +54,8 @@ final class VideoFeedViewController: UIViewController {
             max(Self.minimumCacheCount, storedCount ?? Self.defaultCacheCount)
         )
         self.cacheCount = resolvedCount
+        let storedPlaybackEndAction = UserDefaults.standard.string(forKey: Self.playbackEndActionKey)
+        self.playbackEndAction = PlaybackEndAction(rawValue: storedPlaybackEndAction ?? PlaybackEndAction.loopCurrent.rawValue) ?? .loopCurrent
         self.favoriteIDs = Set(UserDefaults.standard.stringArray(forKey: Self.favoriteIDsKey) ?? [])
         self.preloadCache = PreloadCache(maxItems: resolvedCount)
 
@@ -284,16 +288,53 @@ final class VideoFeedViewController: UIViewController {
         }
     }
 
-    private func cachedDisplayNamesForSettings() -> [String] {
-        let local = VideoDiskCache.shared.cachedEntries().map {
-            "离线缓存 · \($0.name) (\(VideoDiskCache.formatSize($0.sizeBytes)))"
+    private func cachedEntriesForSettings() -> [VideoDiskCache.Entry] {
+        VideoDiskCache.shared.cachedEntries()
+    }
+
+    private func refreshVisibleCacheIndicators() {
+        for visible in collectionView.visibleCells {
+            (visible as? VideoCell)?.refreshCacheBadge()
         }
-        let warm = preloadCache.cachedNames().map { "预加载 · \($0)" }
-        return local + warm
     }
 
     private func persistFavoriteIDs() {
         UserDefaults.standard.set(Array(favoriteIDs).sorted(), forKey: Self.favoriteIDsKey)
+    }
+
+    private func favoriteRecordsForSettings() -> [FavoriteVideoRecord] {
+        var records: [FavoriteVideoRecord] = []
+
+        for item in items where favoriteIDs.contains(item.id) {
+            let detail: String
+            if let duration = item.durationSeconds, duration > 0 {
+                let minutes = Int(duration) / 60
+                let seconds = Int(duration) % 60
+                detail = String(format: "时长 %02d:%02d", minutes, seconds)
+            } else {
+                detail = "当前列表视频"
+            }
+            records.append(FavoriteVideoRecord(id: item.id, title: item.name, detail: detail))
+        }
+
+        let knownIDs = Set(records.map { $0.id })
+        let notLoadedIDs = favoriteIDs.subtracting(knownIDs).sorted()
+        for id in notLoadedIDs {
+            records.append(FavoriteVideoRecord(id: id, title: "收藏视频 \(String(id.prefix(6)))", detail: "未加载到当前视频流"))
+        }
+        return records
+    }
+
+    private func refreshVisibleFavoriteIndicators() {
+        for visible in collectionView.visibleCells {
+            guard
+                let cell = visible as? VideoCell,
+                let indexPath = collectionView.indexPath(for: cell),
+                indexPath.item < items.count
+            else { continue }
+            let item = items[indexPath.item]
+            cell.applyFavoriteState(favoriteIDs.contains(item.id))
+        }
     }
 
     private func setFavorite(_ favorite: Bool, for itemID: String) {
@@ -319,6 +360,15 @@ final class VideoFeedViewController: UIViewController {
         let resolvedPool = filtered.isEmpty ? candidates : filtered
         guard let target = resolvedPool.randomElement() else { return }
         scrollToIndex(target, animated: true)
+    }
+
+    private func handlePlaybackEnded(for itemID: String) {
+        guard playbackEndAction == .playNext else { return }
+        guard let currentIndex = items.firstIndex(where: { $0.id == itemID }) else { return }
+
+        let nextIndex = currentIndex + 1
+        guard nextIndex < items.count else { return }
+        scrollToIndex(nextIndex, animated: true)
     }
 
     @objc private func openMenu() {
@@ -384,8 +434,18 @@ final class VideoFeedViewController: UIViewController {
     @objc private func openSettings() {
         let storedType = UserDefaults.standard.string(forKey: "embytok.serverType")
         let currentType = ServerType(rawValue: storedType ?? config.serverType.rawValue) ?? config.serverType
-        let settings = SettingsViewController(cacheCount: cacheCount, serverType: currentType)
-        settings.onCacheCountChanged = { [weak self, weak settings] count in
+        let settings = SettingsViewController(
+            cacheCount: cacheCount,
+            serverType: currentType,
+            playbackEndAction: playbackEndAction
+        )
+        activeSettingsViewController = settings
+
+        settings.onDismissed = { [weak self] in
+            self?.activeSettingsViewController = nil
+        }
+
+        settings.onCacheCountChanged = { [weak self] count in
             guard let self = self else { return }
             let clamped = max(Self.minimumCacheCount, min(Self.maxSafeCacheCount, count))
             self.cacheCount = clamped
@@ -393,33 +453,61 @@ final class VideoFeedViewController: UIViewController {
             self.preloadCache.updateMaxItems(clamped)
             self.preloadCache.clear()
             self.schedulePreload(from: self.activeIndex, direction: .neutral, delay: 0.05)
-            settings?.updateCachedVideos(self.cachedDisplayNamesForSettings())
         }
         settings.onServerTypeChanged = { serverType in
             UserDefaults.standard.set(serverType.rawValue, forKey: "embytok.serverType")
         }
+        settings.onPlaybackEndActionChanged = { [weak self] action in
+            guard let self = self else { return }
+            self.playbackEndAction = action
+            UserDefaults.standard.set(action.rawValue, forKey: Self.playbackEndActionKey)
+        }
         settings.onReconnectRequested = { [weak self] in
             self?.navigationController?.popToRootViewController(animated: true)
         }
-        settings.onSpeedTestRequested = { [weak self] in
+        settings.onCacheEntryDeleted = { [weak self] _ in
+            self?.refreshVisibleCacheIndicators()
+        }
+        settings.onClearCacheRequested = { [weak self] in
+            let removed = VideoDiskCache.shared.clearAllCachedVideos()
+            self?.preloadCache.clear()
+            self?.refreshVisibleCacheIndicators()
+            return removed
+        }
+        settings.onApplyRequested = { count, serverType in
+            UserDefaults.standard.set(count, forKey: Self.cacheCountKey)
+            UserDefaults.standard.set(serverType.rawValue, forKey: "embytok.serverType")
+        }
+        settings.favoriteItemsProvider = { [weak self] in
+            self?.favoriteRecordsForSettings() ?? []
+        }
+        settings.onFavoriteRemoved = { [weak self] favoriteID in
+            self?.setFavorite(false, for: favoriteID)
+            self?.refreshVisibleFavoriteIndicators()
+        }
+        settings.onFavoriteSelected = { [weak self] favoriteID in
             guard let self = self else { return }
-            guard let current = self.items.first, let url = self.client.videoURL(for: current, config: self.config) else {
-                settings.updateSpeedTestResult("没有可测速的视频")
-                return
-            }
-            self.speedTestService.runTest(url: url) { result in
-                DispatchQueue.main.async {
-                    switch result {
-                    case .success(let (mbps, duration)):
-                        settings.updateSpeedTestResult(String(format: "%.2f Mbps (%.2fs)", mbps, duration))
-                    case .failure(let error):
-                        settings.updateSpeedTestResult("测速失败：\(error.localizedDescription)")
-                    }
-                }
+            if let index = self.items.firstIndex(where: { $0.id == favoriteID }) {
+                self.scrollToIndex(index, animated: false)
             }
         }
-        settings.updateCachedVideos(cachedDisplayNamesForSettings())
-        navigationController?.pushViewController(settings, animated: true)
+        settings.speedTestURLProvider = { [weak self] in
+            guard let self = self, !self.items.isEmpty else { return nil }
+            let safeIndex = max(0, min(self.activeIndex, self.items.count - 1))
+            let current = self.items[safeIndex]
+            return self.client.videoURL(for: current, config: self.config)
+        }
+        settings.refreshCachedVideos(cachedEntriesForSettings())
+
+        if let sheet = settings.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.selectedDetentIdentifier = .medium
+            sheet.prefersGrabberVisible = false
+            sheet.prefersScrollingExpandsWhenScrolledToEdge = true
+            sheet.preferredCornerRadius = 20
+        }
+
+        present(settings, animated: true)
     }
 }
 
@@ -440,7 +528,8 @@ extension VideoFeedViewController: UICollectionViewDataSource {
             preloadCache: preloadCache,
             isMuted: isMuted,
             isPureMode: isPureMode,
-            isFavorite: favoriteIDs.contains(item.id)
+            isFavorite: favoriteIDs.contains(item.id),
+            playbackEndAction: playbackEndAction
         )
         cell.onToggleMute = { [weak self] in
             guard let self = self else { return }
@@ -460,15 +549,16 @@ extension VideoFeedViewController: UICollectionViewDataSource {
         }
         cell.onCacheStateChanged = { [weak self] in
             guard let self = self else { return }
-            if let settings = self.navigationController?.topViewController as? SettingsViewController {
-                settings.updateCachedVideos(self.cachedDisplayNamesForSettings())
-            }
+            self.activeSettingsViewController?.refreshCachedVideos(self.cachedEntriesForSettings())
         }
         cell.onToggleFavorite = { [weak self] nextFavorite in
             self?.setFavorite(nextFavorite, for: item.id)
         }
         cell.onRandomRequested = { [weak self] in
             self?.jumpToRandomVideo(favoritesOnly: false)
+        }
+        cell.onPlaybackEnded = { [weak self] in
+            self?.handlePlaybackEnded(for: item.id)
         }
         return cell
     }

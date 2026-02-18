@@ -244,6 +244,46 @@ final class VideoDiskCache {
         }
     }
 
+    @discardableResult
+    func removeCachedVideo(remoteURL: String) -> Bool {
+        return stateQueue.sync {
+            loadManifestLockedIfNeeded()
+            guard let entry = entriesByURL[remoteURL] else { return false }
+            let fullURL = cacheDirectory.appendingPathComponent(entry.localFilename)
+            if fileManager.fileExists(atPath: fullURL.path) {
+                try? fileManager.removeItem(at: fullURL)
+            }
+            entriesByURL.removeValue(forKey: remoteURL)
+            remoteSizeCache.removeValue(forKey: remoteURL)
+            saveManifestLocked()
+            return true
+        }
+    }
+
+    @discardableResult
+    func clearAllCachedVideos() -> Int {
+        return stateQueue.sync {
+            loadManifestLockedIfNeeded()
+            let existing = entriesByURL.values
+            for entry in existing {
+                let fullURL = cacheDirectory.appendingPathComponent(entry.localFilename)
+                if fileManager.fileExists(atPath: fullURL.path) {
+                    try? fileManager.removeItem(at: fullURL)
+                }
+            }
+            entriesByURL.removeAll()
+            remoteSizeCache.removeAll()
+            try? fileManager.removeItem(at: manifestURL)
+            saveManifestLocked()
+            return existing.count
+        }
+    }
+
+    func localFileURL(for entry: Entry) -> URL? {
+        let fileURL = cacheDirectory.appendingPathComponent(entry.localFilename)
+        return fileManager.fileExists(atPath: fileURL.path) ? fileURL : nil
+    }
+
     static func formatSize(_ bytes: Int64?) -> String {
         guard let bytes, bytes > 0 else { return "--" }
         let formatter = ByteCountFormatter()

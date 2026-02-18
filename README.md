@@ -9,6 +9,8 @@ EmbyTok 是一个为 Emby 媒体服务器设计的竖屏视频浏览客户端，
 <img src="https://gitee.com/miguyomi/embytok/raw/master/tmp/4.jpg" width="24%" />
 </div>
 
+
+
 ## 功能特性
 
 - 📱 **TikTok 式浏览体验**：全屏竖屏视频浏览，上下滑动切换视频
@@ -91,6 +93,8 @@ EmbyTok 是一个为 Emby 媒体服务器设计的竖屏视频浏览客户端，
 
 如果你不使用 Emby/Plex，可以直接启用“文件服务”模式。  
 管理员在网页管理页中配置多个“视频流服务”（服务名 + 文件夹路径）后，局域网其他设备只需选择服务名称即可使用。
+
+![](./public/image_admin.png)
 
 ### 1) 构建前端
 

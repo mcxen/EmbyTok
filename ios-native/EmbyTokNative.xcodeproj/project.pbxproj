@@ -7,48 +7,75 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		177AB22D714149B3B458D160 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3D238B9A58B04CFBAD0D2827 /* Assets.xcassets */; };
+		02160A931B2244019FE19094 /* WatchVideoFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55EF222EA43E42D9BC15987B /* WatchVideoFeedView.swift */; };
+		102AFAB62F45C29400E1219F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 102AFAB52F45C29400E1219F /* Assets.xcassets */; };
 		1CE379681A754C2AB785256F /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DB15E09B3D5545CFA0EBEDDC /* UIKit.framework */; };
 		3B6215378F4D4D85A728A70A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BEF9C4AD5C24C30BA381BB3 /* AppDelegate.swift */; };
 		516BA9D668C64724907C3910 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D986B0D94648C1B2856F29 /* APIClient.swift */; };
+		52644577EB094276B706002E /* WatchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76EB4CFF9D0F4A5D8EB4A75F /* WatchModels.swift */; };
+		5AD71A599251415B8A00AA9C /* VideoGridViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA95D4E781F345F9853F1BC2 /* VideoGridViewController.swift */; };
+		5E3AF5BD50124BF5991BBB4C /* WatchVideoPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 355F54CEFA0C47CCBF80DA87 /* WatchVideoPageView.swift */; };
 		66592DD7B8084843A7F324A7 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6170F30FB7144476B9408949 /* Models.swift */; };
 		6A2C2379B7DB41B4BF2DF1D8 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5742CBE4BAF4617BF32E4A5 /* PlayerView.swift */; };
 		807C75FD9F944112BF3A1DCB /* PreloadCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F95C67503464043B10E1348 /* PreloadCache.swift */; };
 		8C26D442568D4F49B2F03E71 /* VideoCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E3783D1DF6464887CF4B5C /* VideoCell.swift */; };
-		ADF4E492D9DE4D9F99DBBDFA /* VideoGridCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E1837B491A24AD0B329BACE /* VideoGridCell.swift */; };
-		5AD71A599251415B8A00AA9C /* VideoGridViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA95D4E781F345F9853F1BC2 /* VideoGridViewController.swift */; };
-		D89D76B9D4104BD2B996F69D /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34011F96FCEF45C694C9A221 /* SettingsViewController.swift */; };
-		B6AFBA687EDA48D19305348B /* SpeedTestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFD25E85845F49A0AC5F15A3 /* SpeedTestService.swift */; };
 		8D407DA4EEA24A02AF1DB378 /* VideoFeedViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A290181C9545429C36D76E /* VideoFeedViewController.swift */; };
+		97ABC0AAF9BD46AF8B9FEB54 /* EmbyTokWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CDD21F18827428482840841 /* EmbyTokWatchApp.swift */; };
 		9C264715BAF544A99571EDB9 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49CC635ED51642DB9781C362 /* AVFoundation.framework */; };
 		9CCAADB0A0DB49D5AA4DC60E /* ConnectViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99C969545F24619A134CF80 /* ConnectViewController.swift */; };
 		A26CC755EBFF422591C965D4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C604167B0B7F487D960E067A /* Foundation.framework */; };
+		ADF4E492D9DE4D9F99DBBDFA /* VideoGridCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E1837B491A24AD0B329BACE /* VideoGridCell.swift */; };
+		B403F1180B9E4765A4D07C66 /* WatchVideoCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = D903399A67E04485AB99D6D8 /* WatchVideoCache.swift */; };
+		B6AFBA687EDA48D19305348B /* SpeedTestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFD25E85845F49A0AC5F15A3 /* SpeedTestService.swift */; };
+		B6FF667A84334786A11E8A95 /* WatchAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4DB37CCBAD421D891E1063 /* WatchAPIClient.swift */; };
+		C467417AD683431EA738EBDE /* WatchAppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCE35EF103C642F3BBFAA061 /* WatchAppState.swift */; };
 		C7769021B736436F93A51010 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1BF4748169747BFB08BB500 /* SceneDelegate.swift */; };
+		D89D76B9D4104BD2B996F69D /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34011F96FCEF45C694C9A221 /* SettingsViewController.swift */; };
+		DA6FD8434A604A21ABBE7EE5 /* WatchConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97B80D28E5F4965B088ACA9 /* WatchConnectView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		0BEF9C4AD5C24C30BA381BB3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		102AFAB52F45C29400E1219F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		140B66D08F224FA78B8004B2 /* EmbyTokNative.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = EmbyTokNative.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		3D238B9A58B04CFBAD0D2827 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2E1837B491A24AD0B329BACE /* VideoGridCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoGridCell.swift; sourceTree = "<group>"; };
+		34011F96FCEF45C694C9A221 /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
+		355F54CEFA0C47CCBF80DA87 /* WatchVideoPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchVideoPageView.swift; sourceTree = "<group>"; };
 		3F95C67503464043B10E1348 /* PreloadCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreloadCache.swift; sourceTree = "<group>"; };
+		47BB2A545BFD42D4ADD0A096 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		49CC635ED51642DB9781C362 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		54A290181C9545429C36D76E /* VideoFeedViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFeedViewController.swift; sourceTree = "<group>"; };
+		55EF222EA43E42D9BC15987B /* WatchVideoFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchVideoFeedView.swift; sourceTree = "<group>"; };
 		6170F30FB7144476B9408949 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		742A1DF3381D4D9EB7839D1A /* EmbyTokWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = EmbyTokWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		76EB4CFF9D0F4A5D8EB4A75F /* WatchModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchModels.swift; sourceTree = "<group>"; };
+		7CDD21F18827428482840841 /* EmbyTokWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbyTokWatchApp.swift; sourceTree = "<group>"; };
+		80C6DECAB3194AEF8124170B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		98272D7CD912459B8D495C71 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A0E3783D1DF6464887CF4B5C /* VideoCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCell.swift; sourceTree = "<group>"; };
-		2E1837B491A24AD0B329BACE /* VideoGridCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoGridCell.swift; sourceTree = "<group>"; };
-		EA95D4E781F345F9853F1BC2 /* VideoGridViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoGridViewController.swift; sourceTree = "<group>"; };
-		34011F96FCEF45C694C9A221 /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
-		CFD25E85845F49A0AC5F15A3 /* SpeedTestService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedTestService.swift; sourceTree = "<group>"; };
+		A97B80D28E5F4965B088ACA9 /* WatchConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectView.swift; sourceTree = "<group>"; };
 		C604167B0B7F487D960E067A /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		C99C969545F24619A134CF80 /* ConnectViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectViewController.swift; sourceTree = "<group>"; };
+		CCE35EF103C642F3BBFAA061 /* WatchAppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppState.swift; sourceTree = "<group>"; };
+		CFD25E85845F49A0AC5F15A3 /* SpeedTestService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedTestService.swift; sourceTree = "<group>"; };
 		D1BF4748169747BFB08BB500 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		D903399A67E04485AB99D6D8 /* WatchVideoCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchVideoCache.swift; sourceTree = "<group>"; };
 		DB15E09B3D5545CFA0EBEDDC /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		E8CA4C49DDC34F2392BA35F5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		EA95D4E781F345F9853F1BC2 /* VideoGridViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoGridViewController.swift; sourceTree = "<group>"; };
+		ED4DB37CCBAD421D891E1063 /* WatchAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAPIClient.swift; sourceTree = "<group>"; };
 		F4D986B0D94648C1B2856F29 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		F5742CBE4BAF4617BF32E4A5 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		6A2D113988EE419C9086A977 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8D7C6C795FF44256B9394C14 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -83,21 +110,38 @@
 			path = EmbyTokNative;
 			sourceTree = "<group>";
 		};
-		2F2E76768B47440FA0269FAE /*  */ = {
+		21CECEAD8C3A4D5E90181EA5 /* EmbyTokWatch/WatchApp */ = {
+			isa = PBXGroup;
+			children = (
+				7CDD21F18827428482840841 /* EmbyTokWatchApp.swift */,
+				CCE35EF103C642F3BBFAA061 /* WatchAppState.swift */,
+				76EB4CFF9D0F4A5D8EB4A75F /* WatchModels.swift */,
+				ED4DB37CCBAD421D891E1063 /* WatchAPIClient.swift */,
+				D903399A67E04485AB99D6D8 /* WatchVideoCache.swift */,
+				A97B80D28E5F4965B088ACA9 /* WatchConnectView.swift */,
+				55EF222EA43E42D9BC15987B /* WatchVideoFeedView.swift */,
+				355F54CEFA0C47CCBF80DA87 /* WatchVideoPageView.swift */,
+				98272D7CD912459B8D495C71 /* Info.plist */,
+			);
+			path = EmbyTokWatch/WatchApp;
+			sourceTree = "<group>";
+		};
+		2F2E76768B47440FA0269FAE = {
 			isa = PBXGroup;
 			children = (
 				1891A6097B8D40D8836CD010 /* EmbyTokNative */,
+				21CECEAD8C3A4D5E90181EA5 /* EmbyTokWatch/WatchApp */,
 				5D9DD251B55943E580FCEA8F /* EmbyTokNative */,
 				B034EB79963C43C294D91CD2,
 				54C7F164FDD94B8782519FE2 /* Products */,
 			);
-			name = "";
 			sourceTree = "<group>";
 		};
 		54C7F164FDD94B8782519FE2 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				140B66D08F224FA78B8004B2 /* EmbyTokNative.app */,
+				742A1DF3381D4D9EB7839D1A /* EmbyTokWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -105,7 +149,7 @@
 		5D9DD251B55943E580FCEA8F /* EmbyTokNative */ = {
 			isa = PBXGroup;
 			children = (
-				3D238B9A58B04CFBAD0D2827 /* Assets.xcassets */,
+				102AFAB52F45C29400E1219F /* Assets.xcassets */,
 			);
 			path = EmbyTokNative;
 			sourceTree = "<group>";
@@ -114,14 +158,33 @@
 			isa = PBXGroup;
 			children = (
 				49CC635ED51642DB9781C362 /* AVFoundation.framework */,
+				47BB2A545BFD42D4ADD0A096 /* AVKit.framework */,
 				DB15E09B3D5545CFA0EBEDDC /* UIKit.framework */,
 				C604167B0B7F487D960E067A /* Foundation.framework */,
+				80C6DECAB3194AEF8124170B /* SwiftUI.framework */,
 			);
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		43F9B27E04CB4BAAAF9A0114 /* EmbyTokWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 94D6B1C9236744B580402B03 /* Build configuration list for PBXNativeTarget "EmbyTokWatch" */;
+			buildPhases = (
+				73E5568D81CE4FF28050FA53 /* Sources */,
+				6A2D113988EE419C9086A977 /* Frameworks */,
+				27DA660BE2C647939AD119C0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = EmbyTokWatch;
+			productName = EmbyTokWatch;
+			productReference = 742A1DF3381D4D9EB7839D1A /* EmbyTokWatch.app */;
+			productType = "com.apple.product-type.application.watchapp2";
+		};
 		7D519116065E45DCB1D9C8EC /* EmbyTokNative */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4A3CD917453C4519A1C6B88A /* Build configuration list for PBXNativeTarget "EmbyTokNative" */;
@@ -148,6 +211,9 @@
 				LastSwiftUpdateCheck = 1500;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
+					43F9B27E04CB4BAAAF9A0114 = {
+						CreatedOnToolsVersion = 15.0;
+					};
 					7D519116065E45DCB1D9C8EC = {
 						CreatedOnToolsVersion = 15.0;
 					};
@@ -161,22 +227,30 @@
 				en,
 				Base,
 			);
-			mainGroup = 2F2E76768B47440FA0269FAE /*  */;
+			mainGroup = 2F2E76768B47440FA0269FAE;
 			productRefGroup = 54C7F164FDD94B8782519FE2 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				43F9B27E04CB4BAAAF9A0114 /* EmbyTokWatch */,
 				7D519116065E45DCB1D9C8EC /* EmbyTokNative */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		27DA660BE2C647939AD119C0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A1F10F6CA82247C7AFA809CD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				177AB22D714149B3B458D160 /* Assets.xcassets in Resources */,
+				102AFAB62F45C29400E1219F /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -203,9 +277,47 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		73E5568D81CE4FF28050FA53 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97ABC0AAF9BD46AF8B9FEB54 /* EmbyTokWatchApp.swift in Sources */,
+				C467417AD683431EA738EBDE /* WatchAppState.swift in Sources */,
+				52644577EB094276B706002E /* WatchModels.swift in Sources */,
+				B6FF667A84334786A11E8A95 /* WatchAPIClient.swift in Sources */,
+				B403F1180B9E4765A4D07C66 /* WatchVideoCache.swift in Sources */,
+				DA6FD8434A604A21ABBE7EE5 /* WatchConnectView.swift in Sources */,
+				02160A931B2244019FE19094 /* WatchVideoFeedView.swift in Sources */,
+				5E3AF5BD50124BF5991BBB4C /* WatchVideoPageView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		0F7BAD95DBEE45B9978EAD9B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = GHV8SD398Q;
+				INFOPLIST_FILE = EmbyTokWatch/WatchApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BINARY_SOURCE_PATH = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.embytok.native.watchkitapp;
+				PRODUCT_NAME = EmbyTokWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = NO;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			};
+			name = Release;
+		};
 		263BCCA03C394E63907B0514 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -232,6 +344,29 @@
 				CLANG_ENABLE_MODULES = YES;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		511F6BDB1E3B4C6C9288462E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = GHV8SD398Q;
+				INFOPLIST_FILE = EmbyTokWatch/WatchApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BINARY_SOURCE_PATH = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.embytok.native.watchkitapp;
+				PRODUCT_NAME = EmbyTokWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = NO;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
 			};
 			name = Debug;
 		};
@@ -281,6 +416,15 @@
 			buildConfigurations = (
 				263BCCA03C394E63907B0514 /* Debug */,
 				C8DC6314BFF64825A2BE8661 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		94D6B1C9236744B580402B03 /* Build configuration list for PBXNativeTarget "EmbyTokWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				511F6BDB1E3B4C6C9288462E /* Debug */,
+				0F7BAD95DBEE45B9978EAD9B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

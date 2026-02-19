@@ -27,3 +27,6 @@ dist-ssr
 xcuserdata/
 *.xcuserdatad/
 *.xcuserstate
+embytok_local_amd64.tar
+embytok_amd64.tar
+embytok_local.tar

@@ -219,6 +219,26 @@ ios-native/EmbyTokNative.xcodeproj
 1. 网页静态站点（`dist`）
 2. 文件服务 API（`/api/folder/*`，含 `Range/HEAD`，用于 Web 和 iOS 播放）
 
+详细的 NAS/Docker 部署与踩坑处理见 `docs/DOCKER_NAS.md`。
+
+GHCR 自动构建已配置：推送到 `main/master` 或打 `v*` 标签会生成多架构镜像。
+镜像地址示例：`ghcr.io/<owner>/<repo>`。
+
+拉取与运行示例：
+
+```bash
+docker pull ghcr.io/<owner>/<repo>:main
+
+docker run -d --name embytok --restart unless-stopped \
+  -p 5176:5176 \
+  -e HOST=0.0.0.0 -e PORT=5176 -e SERVE_WEB=true \
+  -e WEB_ROOT=/app/dist -e LAN_CONFIG_FILE=/app/data/lan-media-config.json \
+  -e MEDIA_ROOT=/media -e BROWSE_ROOTS=/media \
+  -v /path/to/lan-media-config.json:/app/data/lan-media-config.json \
+  -v /path/to/media:/media:ro \
+  ghcr.io/<owner>/<repo>:main
+```
+
 ### 1) 准备媒体目录
 
 在宿主机准备一个视频目录（示例）：
@@ -251,14 +271,23 @@ docker compose up -d --build
 docker compose -f docker-compose.simple.yml up -d --build
 ```
 
-### 4) 网页端观看
+### 4) 手动打包（AMD64）
+
+之前打包用到的命令如下：
+
+```bash
+docker buildx build --platform linux/amd64 -t embytok:amd64 --load .
+docker save -o embytok_amd64.tar embytok:amd64
+```
+
+### 5) 网页端观看
 
 1. 浏览器打开 `http://<宿主机IP>:5176`
 2. 登录页选择 **文件服务**
 3. 服务地址填写 `http://<宿主机IP>:5176`
 4. 选择视频流服务后即可播放
 
-### 5) iOS 客户端观看
+### 6) iOS 客户端观看
 
 1. iOS 原生客户端选择 **Folder**
 2. 服务器地址填写 `http://<宿主机IP>:5176`

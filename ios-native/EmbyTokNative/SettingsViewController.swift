@@ -9,6 +9,7 @@ private enum SettingsSection: Hashable {
 private enum PlaybackRow: Hashable {
     case cacheCount
     case playbackEndAction
+    case timeDisplayMode
     case speedTest
 }
 
@@ -49,6 +50,7 @@ final class SettingsViewController: UIViewController {
     private var cacheCount: Int
     private var serverType: ServerType
     private var playbackEndAction: PlaybackEndAction
+    private var timeDisplayMode: TimeDisplayMode
     private var cachedEntries: [VideoDiskCache.Entry] = []
 
     private var isSpeedTesting = false
@@ -70,6 +72,7 @@ final class SettingsViewController: UIViewController {
     var onCacheCountChanged: ((Int) -> Void)?
     var onServerTypeChanged: ((ServerType) -> Void)?
     var onPlaybackEndActionChanged: ((PlaybackEndAction) -> Void)?
+    var onTimeDisplayModeChanged: ((TimeDisplayMode) -> Void)?
     var onReconnectRequested: (() -> Void)?
     var onCacheEntryDeleted: ((VideoDiskCache.Entry) -> Void)?
     var onClearCacheRequested: (() -> Int)?
@@ -81,10 +84,11 @@ final class SettingsViewController: UIViewController {
     var onFavoriteSelected: ((String) -> Void)?
     var onCachedEntrySelected: ((VideoDiskCache.Entry) -> UIViewController?)?
 
-    init(cacheCount: Int, serverType: ServerType, playbackEndAction: PlaybackEndAction) {
+    init(cacheCount: Int, serverType: ServerType, playbackEndAction: PlaybackEndAction, timeDisplayMode: TimeDisplayMode) {
         self.cacheCount = max(Self.minCacheCount, min(Self.maxCacheCount, cacheCount))
         self.serverType = serverType
         self.playbackEndAction = playbackEndAction
+        self.timeDisplayMode = timeDisplayMode
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .pageSheet
     }
@@ -138,7 +142,7 @@ final class SettingsViewController: UIViewController {
     }
 
     private var playbackRows: [PlaybackRow] {
-        [.cacheCount, .playbackEndAction, .speedTest]
+        [.cacheCount, .playbackEndAction, .timeDisplayMode, .speedTest]
     }
 
     private func configureBackground() {
@@ -286,6 +290,7 @@ final class SettingsViewController: UIViewController {
         tableView.register(SourceSelectionCell.self, forCellReuseIdentifier: SourceSelectionCell.reuseID)
         tableView.register(CacheStepperCell.self, forCellReuseIdentifier: CacheStepperCell.reuseID)
         tableView.register(PlaybackEndActionCell.self, forCellReuseIdentifier: PlaybackEndActionCell.reuseID)
+        tableView.register(TimeDisplayModeCell.self, forCellReuseIdentifier: TimeDisplayModeCell.reuseID)
         tableView.register(SpeedTestCell.self, forCellReuseIdentifier: SpeedTestCell.reuseID)
 
         view.addSubview(tableView)
@@ -339,6 +344,15 @@ final class SettingsViewController: UIViewController {
         rigidHaptic.impactOccurred()
         playbackEndAction = selected
         onPlaybackEndActionChanged?(selected)
+    }
+
+    private func applyTimeDisplayMode(index: Int) {
+        let boundedIndex = max(0, min(index, TimeDisplayMode.allCases.count - 1))
+        let selected = TimeDisplayMode.allCases[boundedIndex]
+        guard selected != timeDisplayMode else { return }
+        rigidHaptic.impactOccurred()
+        timeDisplayMode = selected
+        onTimeDisplayModeChanged?(selected)
     }
 
     private func startSpeedTest() {
@@ -659,6 +673,15 @@ extension SettingsViewController: UITableViewDataSource {
                     self?.applyPlaybackEndAction(index: selectedIndex)
                 }
                 return cell
+            case .timeDisplayMode:
+                guard let cell = tableView.dequeueReusableCell(withIdentifier: TimeDisplayModeCell.reuseID, for: indexPath) as? TimeDisplayModeCell else {
+                    return UITableViewCell()
+                }
+                cell.configure(mode: timeDisplayMode)
+                cell.onModeChanged = { [weak self] selectedIndex in
+                    self?.applyTimeDisplayMode(index: selectedIndex)
+                }
+                return cell
             case .speedTest:
                 guard let cell = tableView.dequeueReusableCell(withIdentifier: SpeedTestCell.reuseID, for: indexPath) as? SpeedTestCell else {
                     return UITableViewCell()
@@ -759,6 +782,8 @@ extension SettingsViewController: UITableViewDelegate {
             case .cacheCount:
                 return 56
             case .playbackEndAction:
+                return 68
+            case .timeDisplayMode:
                 return 68
             case .speedTest:
                 return 78
@@ -1017,6 +1042,58 @@ private final class PlaybackEndActionCell: UITableViewCell {
 
     @objc private func segmentChanged() {
         onActionChanged?(segmentedControl.selectedSegmentIndex)
+    }
+}
+
+private final class TimeDisplayModeCell: UITableViewCell {
+    static let reuseID = "TimeDisplayModeCell"
+
+    var onModeChanged: ((Int) -> Void)?
+    private let titleLabel = UILabel()
+    private let segmentedControl = UISegmentedControl(items: TimeDisplayMode.allCases.map { $0.displayName })
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        selectionStyle = .none
+        backgroundColor = .clear
+
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.text = "时间显示"
+        titleLabel.textColor = .white
+        titleLabel.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+
+        segmentedControl.translatesAutoresizingMaskIntoConstraints = false
+        segmentedControl.selectedSegmentTintColor = UIColor.systemIndigo
+        segmentedControl.backgroundColor = UIColor(white: 0.15, alpha: 1)
+        segmentedControl.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
+        segmentedControl.accessibilityLabel = "时间显示"
+        segmentedControl.accessibilityHint = "切换进度显示的时长样式"
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, segmentedControl])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.spacing = 4
+
+        contentView.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+            segmentedControl.heightAnchor.constraint(equalToConstant: 32)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(mode: TimeDisplayMode) {
+        segmentedControl.selectedSegmentIndex = TimeDisplayMode.allCases.firstIndex(of: mode) ?? 0
+    }
+
+    @objc private func segmentChanged() {
+        onModeChanged?(segmentedControl.selectedSegmentIndex)
     }
 }
 

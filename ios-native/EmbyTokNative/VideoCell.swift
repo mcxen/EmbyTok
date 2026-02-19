@@ -8,7 +8,6 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private static let floatingIconPointSize: CGFloat = 12
     private static let floatingStackVerticalOffset: CGFloat = 56
     private static let overlayAutoHideDelay: TimeInterval = 8
-    private static let swipeSeekStepSeconds: Double = 10
 
     private let playerView = PlayerView()
     private let titleLabel = UILabel()
@@ -29,6 +28,8 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private let muteButton = UIButton(type: .system)
     private let muteHintView = UIView()
     private let muteHintLabel = UILabel()
+    private let seekHintView = UIView()
+    private let seekHintLabel = UILabel()
 
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
@@ -43,6 +44,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private var isMuted = false
     private var isPureMode = false
     private var playbackEndAction: PlaybackEndAction = .loopCurrent
+    private var timeDisplayMode: TimeDisplayMode = .elapsed
     private var currentRemoteVideoURL: URL?
     private var currentVideoName: String?
     private var isCachingVideo = false
@@ -57,6 +59,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private var pureModeBottomConstraint: NSLayoutConstraint?
     private var overlayHideWorkItem: DispatchWorkItem?
     private var muteHintWorkItem: DispatchWorkItem?
+    private var seekHintWorkItem: DispatchWorkItem?
     private var playbackToken = UUID()
     private let muteFeedback = UIImpactFeedbackGenerator(style: .light)
     private let pureModeFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -64,8 +67,9 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private var pinchGesture: UIPinchGestureRecognizer?
     private var twoFingerTapGesture: UITapGestureRecognizer?
     private var twoFingerDoubleTapGesture: UITapGestureRecognizer?
-    private var swipeLeftGesture: UISwipeGestureRecognizer?
-    private var swipeRightGesture: UISwipeGestureRecognizer?
+    private var panGesture: UIPanGestureRecognizer?
+    private var panStartTime: Double = 0
+    private var panShouldResumeAfterSeek = false
 
     var onToggleMute: (() -> Void)?
     var onTogglePureMode: (() -> Void)?
@@ -179,6 +183,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         floatingStack.addArrangedSubview(randomButton)
         contentView.addSubview(pureModeButton)
         contentView.addSubview(muteHintView)
+        contentView.addSubview(seekHintView)
 
         NSLayoutConstraint.activate([
             playerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -258,6 +263,30 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             muteHintView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 12)
         ])
 
+        seekHintView.translatesAutoresizingMaskIntoConstraints = false
+        seekHintView.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        seekHintView.layer.cornerRadius = 12
+        seekHintView.isHidden = true
+        seekHintView.alpha = 0
+
+        seekHintLabel.translatesAutoresizingMaskIntoConstraints = false
+        seekHintLabel.textColor = .white
+        seekHintLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+        seekHintLabel.numberOfLines = 1
+        seekHintView.addSubview(seekHintLabel)
+
+        NSLayoutConstraint.activate([
+            seekHintLabel.leadingAnchor.constraint(equalTo: seekHintView.leadingAnchor, constant: 10),
+            seekHintLabel.trailingAnchor.constraint(equalTo: seekHintView.trailingAnchor, constant: -10),
+            seekHintLabel.topAnchor.constraint(equalTo: seekHintView.topAnchor, constant: 6),
+            seekHintLabel.bottomAnchor.constraint(equalTo: seekHintView.bottomAnchor, constant: -6),
+
+            seekHintView.centerXAnchor.constraint(equalTo: controlsContainer.centerXAnchor),
+            seekHintView.topAnchor.constraint(equalTo: controlsContainer.bottomAnchor, constant: 8),
+            seekHintView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 12),
+            seekHintView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -12)
+        ])
+
         controlsContainer.alpha = 0
         controlsContainer.isHidden = true
 
@@ -291,19 +320,12 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         self.pinchGesture = pinchGesture
         contentView.addGestureRecognizer(pinchGesture)
 
-        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handlePureModeSwipe))
-        swipeLeft.direction = .left
-        swipeLeft.cancelsTouchesInView = false
-        swipeLeft.delegate = self
-        self.swipeLeftGesture = swipeLeft
-        contentView.addGestureRecognizer(swipeLeft)
-
-        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handlePureModeSwipe))
-        swipeRight.direction = .right
-        swipeRight.cancelsTouchesInView = false
-        swipeRight.delegate = self
-        self.swipeRightGesture = swipeRight
-        contentView.addGestureRecognizer(swipeRight)
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleSeekPan))
+        panGesture.maximumNumberOfTouches = 1
+        panGesture.cancelsTouchesInView = false
+        panGesture.delegate = self
+        self.panGesture = panGesture
+        contentView.addGestureRecognizer(panGesture)
     }
 
     required init?(coder: NSCoder) {
@@ -349,10 +371,15 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         isFavorite = false
         currentVideoSizeBytes = nil
         currentVideoSize = nil
+        timeDisplayMode = .elapsed
         muteHintWorkItem?.cancel()
         muteHintWorkItem = nil
         muteHintView.alpha = 0
         muteHintView.isHidden = true
+        seekHintWorkItem?.cancel()
+        seekHintWorkItem = nil
+        seekHintView.alpha = 0
+        seekHintView.isHidden = true
         updateFavoriteIcon()
         setManualCacheState(cached: false, caching: false)
         applyRotation()
@@ -405,8 +432,10 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         hasRequestedRemoteSize = false
         shouldResumeAfterSeek = false
         updateFavoriteIcon()
-        currentTimeLabel.text = "00:00"
-        totalTimeLabel.text = "00:00"
+        updateTimeLabels(
+            current: 0,
+            duration: item.durationSeconds ?? 0
+        )
 
         var resolvedPlayerItem: AVPlayerItem?
         if let remoteVideoURL, let localURL = VideoDiskCache.shared.cachedFileURL(for: remoteVideoURL) {
@@ -545,6 +574,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         } else {
             showPlaybackOverlay(animated: false, autoHide: false)
         }
+        hideSeekHint(animated: false)
         cacheControlStack.isHidden = pure
         favoriteButton.isHidden = pure
         muteButton.isHidden = pure
@@ -558,6 +588,11 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         refreshGestureAvailability()
     }
 
+    func applyTimeDisplayMode(_ mode: TimeDisplayMode) {
+        timeDisplayMode = mode
+        updateTimeLabels(current: nil, duration: currentDurationSeconds())
+    }
+
     func refreshGestureAvailability() {
         let pinchEnabled = GestureSettings.isPinchPureModeEnabled
         pinchGesture?.isEnabled = pinchEnabled
@@ -567,8 +602,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         twoFingerDoubleTapGesture?.isEnabled = twoFingerEnabled
 
         let swipeEnabled = GestureSettings.isPureModeSwipeSeekEnabled && isPureMode
-        swipeLeftGesture?.isEnabled = swipeEnabled
-        swipeRightGesture?.isEnabled = swipeEnabled
+        panGesture?.isEnabled = swipeEnabled
     }
 
     func applyFavoriteState(_ favorite: Bool) {
@@ -594,7 +628,7 @@ extension VideoCell {
         if let tap = gestureRecognizer as? UITapGestureRecognizer, tap.numberOfTouchesRequired == 2 {
             return true
         }
-        if gestureRecognizer is UISwipeGestureRecognizer {
+        if gestureRecognizer is UIPanGestureRecognizer {
             return true
         }
         let touchedView = touch.view
@@ -604,6 +638,15 @@ extension VideoCell {
         }
         if let touchedView = touchedView, touchedView.isDescendant(of: floatingStack) {
             return false
+        }
+        return true
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if let pan = gestureRecognizer as? UIPanGestureRecognizer {
+            guard GestureSettings.isPureModeSwipeSeekEnabled, isPureMode else { return false }
+            let velocity = pan.velocity(in: contentView)
+            return abs(velocity.x) > abs(velocity.y)
         }
         return true
     }
@@ -660,7 +703,7 @@ private extension VideoCell {
             self.updateDuration()
             if !self.isSeeking {
                 self.progressSlider.value = Float(time.seconds)
-                self.currentTimeLabel.text = self.formattedPlaybackTime(time.seconds)
+                self.updateTimeLabels(current: time.seconds, duration: self.currentDurationSeconds())
             }
             self.updatePlayPauseIcon()
         }
@@ -678,7 +721,7 @@ private extension VideoCell {
         let seconds = duration.seconds
         if seconds > 0 {
             progressSlider.maximumValue = Float(seconds)
-            totalTimeLabel.text = formattedPlaybackTime(seconds)
+            updateTimeLabels(current: nil, duration: seconds)
         }
     }
 
@@ -695,7 +738,7 @@ private extension VideoCell {
         guard let player = player else { return }
         let time = CMTime(seconds: Double(progressSlider.value), preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
-        currentTimeLabel.text = formattedPlaybackTime(time.seconds)
+        updateTimeLabels(current: time.seconds, duration: currentDurationSeconds())
     }
 
     @objc func seekTouchUp() {
@@ -775,6 +818,55 @@ private extension VideoCell {
             return String(format: "%d:%02d:%02d", hours, minutes, seconds)
         }
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private func currentDurationSeconds() -> Double {
+        let duration = playerItem?.duration.seconds ?? Double(progressSlider.maximumValue)
+        guard duration.isFinite && duration > 0 else { return 0 }
+        return duration
+    }
+
+    private func updateTimeLabels(current: Double?, duration: Double?) {
+        let durationSeconds = normalizeDurationSeconds(duration ?? currentDurationSeconds())
+        let currentSeconds = normalizeCurrentSeconds(current ?? player?.currentTime().seconds ?? Double(progressSlider.value), duration: durationSeconds)
+        currentTimeLabel.text = formattedCurrentTimeText(current: currentSeconds, duration: durationSeconds)
+        totalTimeLabel.text = durationSeconds > 0 ? formattedPlaybackTime(durationSeconds) : "00:00"
+    }
+
+    private func normalizeDurationSeconds(_ duration: Double) -> Double {
+        guard duration.isFinite && duration > 0 else { return 0 }
+        return duration
+    }
+
+    private func normalizeCurrentSeconds(_ current: Double, duration: Double) -> Double {
+        let safeCurrent = max(0, current.isFinite ? current : 0)
+        guard duration > 0 else { return safeCurrent }
+        return min(safeCurrent, duration)
+    }
+
+    private func formattedCurrentTimeText(current: Double, duration: Double) -> String {
+        switch timeDisplayMode {
+        case .elapsed:
+            return formattedPlaybackTime(current)
+        case .remaining:
+            guard duration > 0 else { return formattedPlaybackTime(current) }
+            let remaining = max(0, duration - current)
+            return "-\(formattedPlaybackTime(remaining))"
+        }
+    }
+
+    private func formattedSeekHintText(current: Double, duration: Double) -> String {
+        let currentText: String
+        switch timeDisplayMode {
+        case .elapsed:
+            currentText = formattedPlaybackTime(current)
+        case .remaining:
+            guard duration > 0 else { return formattedPlaybackTime(current) }
+            let remaining = max(0, duration - current)
+            currentText = "-\(formattedPlaybackTime(remaining))"
+        }
+        guard duration > 0 else { return currentText }
+        return "\(currentText) / \(formattedPlaybackTime(duration))"
     }
 
     func attachLoopObserver() {
@@ -899,22 +991,48 @@ private extension VideoCell {
         }
     }
 
-    @objc private func handlePureModeSwipe(_ gesture: UISwipeGestureRecognizer) {
+    @objc private func handleSeekPan(_ gesture: UIPanGestureRecognizer) {
         guard GestureSettings.isPureModeSwipeSeekEnabled, isPureMode else { return }
-        let delta = gesture.direction == .left ? -Self.swipeSeekStepSeconds : Self.swipeSeekStepSeconds
-        seekBySeconds(delta)
-    }
-
-    private func seekBySeconds(_ delta: Double) {
         guard let player = player, let item = playerItem else { return }
         let duration = item.duration.seconds
         guard duration.isFinite, duration > 0 else { return }
-        let current = player.currentTime().seconds
-        let target = min(max(0, current + delta), duration)
-        let time = CMTime(seconds: target, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
-        progressSlider.value = Float(target)
-        currentTimeLabel.text = formattedPlaybackTime(target)
+
+        switch gesture.state {
+        case .began:
+            panStartTime = normalizeCurrentSeconds(player.currentTime().seconds, duration: duration)
+            let status = player.timeControlStatus
+            panShouldResumeAfterSeek = (player.rate > 0) || status == .playing || status == .waitingToPlayAtSpecifiedRate
+            isSeeking = true
+            showPlaybackOverlay(animated: true, autoHide: false)
+        case .changed:
+            let translation = gesture.translation(in: contentView).x
+            let stepSeconds = Double(GestureSettings.swipeSeekStepSeconds)
+            let delta = Double(translation / 100.0) * stepSeconds
+            let target = min(max(0, panStartTime + delta), duration)
+            seekToSeconds(target, updatePlayer: true)
+        case .ended, .cancelled, .failed:
+            isSeeking = false
+            if panShouldResumeAfterSeek {
+                player.playImmediately(atRate: 1.0)
+                updatePlayPauseIcon()
+            }
+            panShouldResumeAfterSeek = false
+            showPlaybackOverlay(animated: true, autoHide: isPureMode)
+        default:
+            break
+        }
+    }
+
+    private func seekToSeconds(_ seconds: Double, updatePlayer: Bool) {
+        guard let player = player else { return }
+        let clamped = max(0, seconds)
+        if updatePlayer {
+            let time = CMTime(seconds: clamped, preferredTimescale: 600)
+            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+        progressSlider.value = Float(clamped)
+        updateTimeLabels(current: clamped, duration: currentDurationSeconds())
+        showSeekHint(current: clamped, duration: currentDurationSeconds())
     }
 
     private func showMuteHint(isMuted: Bool) {
@@ -939,6 +1057,39 @@ private extension VideoCell {
         }
         let completion: (Bool) -> Void = { _ in
             self.muteHintView.isHidden = true
+        }
+        if animated {
+            UIView.animate(withDuration: 0.25, animations: changes, completion: completion)
+        } else {
+            changes()
+            completion(true)
+        }
+    }
+
+    private func showSeekHint(current: Double, duration: Double) {
+        seekHintWorkItem?.cancel()
+        let clampedDuration = duration.isFinite && duration > 0 ? duration : 0
+        let clampedCurrent = max(0, current.isFinite ? current : 0)
+        seekHintLabel.text = formattedSeekHintText(current: clampedCurrent, duration: clampedDuration)
+        seekHintView.isHidden = false
+        UIView.animate(withDuration: 0.2) {
+            self.seekHintView.alpha = 1
+        }
+        let work = DispatchWorkItem { [weak self] in
+            self?.hideSeekHint(animated: true)
+        }
+        seekHintWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
+    }
+
+    private func hideSeekHint(animated: Bool) {
+        seekHintWorkItem?.cancel()
+        seekHintWorkItem = nil
+        let changes = {
+            self.seekHintView.alpha = 0
+        }
+        let completion: (Bool) -> Void = { _ in
+            self.seekHintView.isHidden = true
         }
         if animated {
             UIView.animate(withDuration: 0.25, animations: changes, completion: completion)

@@ -19,6 +19,7 @@ final class VideoFeedViewController: UIViewController {
     private var isMuted = true
     private var isPureMode = true
     private var playbackEndAction: PlaybackEndAction
+    private var timeDisplayMode: TimeDisplayMode
     private var favoriteIDs: Set<String>
     private weak var activeSettingsViewController: SettingsViewController?
 
@@ -33,6 +34,7 @@ final class VideoFeedViewController: UIViewController {
 
     private static let cacheCountKey = "embytok.cacheCount"
     private static let playbackEndActionKey = "embytok.playbackEndAction"
+    private static let timeDisplayModeKey = "embytok.timeDisplayMode"
     private static let favoriteIDsKey = "embytok.favoriteIDs"
     private static let forwardPreloadCount = 5
     private static let backwardPreloadCount = 3
@@ -72,6 +74,8 @@ final class VideoFeedViewController: UIViewController {
         self.cacheCount = resolvedCount
         let storedPlaybackEndAction = UserDefaults.standard.string(forKey: Self.playbackEndActionKey)
         self.playbackEndAction = PlaybackEndAction(rawValue: storedPlaybackEndAction ?? PlaybackEndAction.loopCurrent.rawValue) ?? .loopCurrent
+        let storedTimeDisplay = UserDefaults.standard.string(forKey: Self.timeDisplayModeKey)
+        self.timeDisplayMode = TimeDisplayMode(rawValue: storedTimeDisplay ?? TimeDisplayMode.elapsed.rawValue) ?? .elapsed
         self.favoriteIDs = Set(UserDefaults.standard.stringArray(forKey: Self.favoriteIDsKey) ?? [])
         self.preloadCache = PreloadCache(maxItems: resolvedCount)
 
@@ -341,6 +345,12 @@ final class VideoFeedViewController: UIViewController {
         }
     }
 
+    private func refreshVisibleTimeDisplayMode() {
+        for visible in collectionView.visibleCells {
+            (visible as? VideoCell)?.applyTimeDisplayMode(timeDisplayMode)
+        }
+    }
+
     private func persistFavoriteIDs() {
         UserDefaults.standard.set(Array(favoriteIDs).sorted(), forKey: Self.favoriteIDsKey)
     }
@@ -545,7 +555,8 @@ final class VideoFeedViewController: UIViewController {
         let settings = SettingsViewController(
             cacheCount: cacheCount,
             serverType: currentType,
-            playbackEndAction: playbackEndAction
+            playbackEndAction: playbackEndAction,
+            timeDisplayMode: timeDisplayMode
         )
         activeSettingsViewController = settings
 
@@ -569,6 +580,12 @@ final class VideoFeedViewController: UIViewController {
             guard let self = self else { return }
             self.playbackEndAction = action
             UserDefaults.standard.set(action.rawValue, forKey: Self.playbackEndActionKey)
+        }
+        settings.onTimeDisplayModeChanged = { [weak self] mode in
+            guard let self = self else { return }
+            self.timeDisplayMode = mode
+            UserDefaults.standard.set(mode.rawValue, forKey: Self.timeDisplayModeKey)
+            self.refreshVisibleTimeDisplayMode()
         }
         settings.onReconnectRequested = { [weak self] in
             self?.navigationController?.popToRootViewController(animated: true)
@@ -736,6 +753,7 @@ extension VideoFeedViewController: UICollectionViewDataSource {
             isFavorite: favoriteIDs.contains(item.id),
             playbackEndAction: playbackEndAction
         )
+        cell.applyTimeDisplayMode(timeDisplayMode)
         cell.onToggleMute = { [weak self] in
             guard let self = self else { return }
             self.isMuted.toggle()

@@ -24,6 +24,18 @@ enum PlaybackEndAction: String, CaseIterable {
     }
 }
 
+enum TimeDisplayMode: String, CaseIterable {
+    case elapsed = "elapsed"
+    case remaining = "remaining"
+
+    var displayName: String {
+        switch self {
+        case .elapsed: return "当前/总时长"
+        case .remaining: return "剩余/总时长"
+        }
+    }
+}
+
 struct ServerConfig {
     let baseURL: URL
     let username: String

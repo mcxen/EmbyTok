@@ -46,6 +46,7 @@ struct VideoItem: Hashable {
     let primaryImageTag: String?
     let durationSeconds: Double?
     let sizeBytes: Int64?
+    let filePath: String?
 }
 
 struct VideoPage {

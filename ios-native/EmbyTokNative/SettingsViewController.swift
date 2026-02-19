@@ -13,15 +13,15 @@ private enum PlaybackRow: Hashable {
 }
 
 private enum SettingsActionKind: Int, CaseIterable {
+    case gestureControl
     case reconnect
-    case favorites
     case clearCache
     case apply
 
     var title: String {
         switch self {
+        case .gestureControl: return "手势控制"
         case .reconnect: return "重新连接"
-        case .favorites: return "管理收藏"
         case .clearCache: return "清除缓存"
         case .apply: return "保存并应用"
         }
@@ -79,6 +79,7 @@ final class SettingsViewController: UIViewController {
     var favoriteItemsProvider: (() -> [FavoriteVideoRecord])?
     var onFavoriteRemoved: ((String) -> Void)?
     var onFavoriteSelected: ((String) -> Void)?
+    var onCachedEntrySelected: ((VideoDiskCache.Entry) -> UIViewController?)?
 
     init(cacheCount: Int, serverType: ServerType, playbackEndAction: PlaybackEndAction) {
         self.cacheCount = max(Self.minCacheCount, min(Self.maxCacheCount, cacheCount))
@@ -137,11 +138,7 @@ final class SettingsViewController: UIViewController {
     }
 
     private var playbackRows: [PlaybackRow] {
-        var rows: [PlaybackRow] = [.cacheCount, .playbackEndAction]
-        if serverType == .emby {
-            rows.append(.speedTest)
-        }
-        return rows
+        [.cacheCount, .playbackEndAction, .speedTest]
     }
 
     private func configureBackground() {
@@ -319,9 +316,7 @@ final class SettingsViewController: UIViewController {
         serverType = selectedType
         onServerTypeChanged?(selectedType)
 
-        if selectedType == .folder {
-            stopSpeedTestUI(resetStatusText: true)
-        }
+        stopSpeedTestUI(resetStatusText: true)
 
         UIView.transition(with: tableView, duration: 0.2, options: .transitionCrossDissolve) {
             self.tableView.reloadData()
@@ -348,7 +343,6 @@ final class SettingsViewController: UIViewController {
 
     private func startSpeedTest() {
         guard !isSpeedTesting else { return }
-        guard serverType == .emby else { return }
         guard let url = speedTestURLProvider?() else {
             speedStatusText = "没有可测速的视频"
             showConnectionErrorBanner()
@@ -415,6 +409,24 @@ final class SettingsViewController: UIViewController {
         )
     }
 
+    private func toggleSpeedTest() {
+        if isSpeedTesting {
+            cancelSpeedTest()
+        } else {
+            startSpeedTest()
+        }
+    }
+
+    private func cancelSpeedTest() {
+        guard isSpeedTesting else { return }
+        stopSpeedTestUI(resetStatusText: false)
+        speedStatusText = "测速已取消"
+        speedDownloadMbps = nil
+        speedUploadMbps = nil
+        notifyHaptic.notificationOccurred(.warning)
+        reloadSpeedSection()
+    }
+
     private func startSpeedTimer(with token: UUID) {
         stopSpeedTimer()
         speedTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
@@ -455,7 +467,7 @@ final class SettingsViewController: UIViewController {
         speedProgress = 0
         stopSpeedTimer()
         if resetStatusText {
-            speedStatusText = "Folder 模式已隐藏测速"
+            speedStatusText = "点击开始测速"
             speedDownloadMbps = nil
             speedUploadMbps = nil
         }
@@ -533,12 +545,28 @@ final class SettingsViewController: UIViewController {
         managementController.onShareEntry = { [weak self] entry in
             self?.shareCachedEntry(entry)
         }
+        managementController.onEntrySelected = { [weak self] entry in
+            return self?.onCachedEntrySelected?(entry)
+        }
 
         let navigation = UINavigationController(rootViewController: managementController)
         navigation.overrideUserInterfaceStyle = .dark
         if let sheet = navigation.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.selectedDetentIdentifier = .large
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 20
+        }
+        present(navigation, animated: true)
+    }
+
+    private func presentGestureSettings() {
+        let controller = GestureSettingsViewController()
+        let navigation = UINavigationController(rootViewController: controller)
+        navigation.overrideUserInterfaceStyle = .dark
+        if let sheet = navigation.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.selectedDetentIdentifier = .medium
             sheet.prefersGrabberVisible = true
             sheet.preferredCornerRadius = 20
         }
@@ -644,7 +672,7 @@ extension SettingsViewController: UITableViewDataSource {
                     statusText: speedStatusText
                 )
                 cell.onStartTapped = { [weak self] in
-                    self?.startSpeedTest()
+                    self?.toggleSpeedTest()
                 }
                 return cell
             }
@@ -681,7 +709,7 @@ extension SettingsViewController: UITableViewDataSource {
             let cell = tableView.dequeueReusableCell(withIdentifier: reuseID) ?? UITableViewCell(style: .subtitle, reuseIdentifier: reuseID)
             cell.backgroundColor = .clear
             cell.selectionStyle = .default
-            cell.accessoryType = .none
+            cell.accessoryType = action == .gestureControl ? .disclosureIndicator : .none
 
             var content = cell.defaultContentConfiguration()
             content.text = action.title
@@ -691,15 +719,15 @@ extension SettingsViewController: UITableViewDataSource {
             content.imageProperties.tintColor = UIColor(white: 0.8, alpha: 1)
 
             switch action {
+            case .gestureControl:
+                content.secondaryText = "开启与配置播放手势"
+                content.image = UIImage(systemName: "hand.tap")
+                content.textProperties.color = .white
+                content.imageProperties.tintColor = UIColor(white: 0.8, alpha: 1)
             case .reconnect:
                 content.secondaryText = "重新连接当前数据源"
                 content.image = UIImage(systemName: "arrow.clockwise")
                 content.textProperties.color = .systemBlue
-            case .favorites:
-                let count = favoriteItemsProvider?().count ?? 0
-                content.secondaryText = count > 0 ? "\(count) 项收藏视频" : "暂无收藏视频"
-                content.image = UIImage(systemName: "heart")
-                cell.accessoryType = .disclosureIndicator
             case .clearCache:
                 content.secondaryText = "删除所有本地缓存文件"
                 content.image = UIImage(systemName: "trash")
@@ -733,7 +761,7 @@ extension SettingsViewController: UITableViewDelegate {
             case .playbackEndAction:
                 return 68
             case .speedTest:
-                return 62
+                return 78
             }
         case .library:
             return 56
@@ -774,12 +802,13 @@ extension SettingsViewController: UITableViewDelegate {
 
         guard let action = SettingsActionKind(rawValue: indexPath.row - 1) else { return }
         switch action {
+        case .gestureControl:
+            rigidHaptic.impactOccurred()
+            presentGestureSettings()
         case .reconnect:
             heavyHaptic.impactOccurred()
             onReconnectRequested?()
             dismissPanel(triggerApply: false)
-        case .favorites:
-            presentFavoritesManagement()
         case .clearCache:
             presentClearCacheConfirmation()
         case .apply:
@@ -855,7 +884,11 @@ private final class CacheStepperCell: UITableViewCell {
 
     private let valueLabel = UILabel()
     private let stepper = UIStepper()
-    private let accessoryContainer = UIStackView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let leftStack = UIStackView()
+    private let rightStack = UIStackView()
+    private let containerStack = UIStackView()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -875,12 +908,42 @@ private final class CacheStepperCell: UITableViewCell {
         stepper.setContentCompressionResistancePriority(.required, for: .horizontal)
         stepper.setContentHuggingPriority(.required, for: .horizontal)
 
-        accessoryContainer.axis = .horizontal
-        accessoryContainer.alignment = .center
-        accessoryContainer.spacing = 10
-        accessoryContainer.addArrangedSubview(valueLabel)
-        accessoryContainer.addArrangedSubview(stepper)
-        accessoryView = accessoryContainer
+        titleLabel.textColor = .white
+        titleLabel.font = UIFont.systemFont(ofSize: 15, weight: .regular)
+        subtitleLabel.textColor = UIColor(white: 0.7, alpha: 1)
+        subtitleLabel.font = UIFont.systemFont(ofSize: 13, weight: .regular)
+
+        leftStack.axis = .vertical
+        leftStack.spacing = 2
+        leftStack.addArrangedSubview(titleLabel)
+        leftStack.addArrangedSubview(subtitleLabel)
+
+        rightStack.axis = .horizontal
+        rightStack.alignment = .center
+        rightStack.spacing = 10
+        rightStack.addArrangedSubview(valueLabel)
+        rightStack.addArrangedSubview(stepper)
+
+        containerStack.axis = .horizontal
+        containerStack.alignment = .center
+        containerStack.distribution = .fill
+        containerStack.spacing = 12
+        containerStack.translatesAutoresizingMaskIntoConstraints = false
+        containerStack.addArrangedSubview(leftStack)
+        containerStack.addArrangedSubview(rightStack)
+
+        leftStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        leftStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        rightStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+        rightStack.setContentHuggingPriority(.required, for: .horizontal)
+
+        contentView.addSubview(containerStack)
+        NSLayoutConstraint.activate([
+            containerStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            containerStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            containerStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            containerStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+        ])
     }
 
     required init?(coder: NSCoder) {
@@ -888,13 +951,8 @@ private final class CacheStepperCell: UITableViewCell {
     }
 
     func configure(cacheCount: Int, minValue: Int, maxValue: Int) {
-        var content = defaultContentConfiguration()
-        content.text = "缓存数量"
-        content.secondaryText = "推荐值：5-12"
-        content.textProperties.font = UIFont.systemFont(ofSize: 15, weight: .regular)
-        content.secondaryTextProperties.font = UIFont.systemFont(ofSize: 13, weight: .regular)
-        content.secondaryTextProperties.color = UIColor(white: 0.7, alpha: 1)
-        contentConfiguration = content
+        titleLabel.text = "缓存数量"
+        subtitleLabel.text = "推荐值：5-12"
 
         stepper.minimumValue = Double(minValue)
         stepper.maximumValue = Double(maxValue)
@@ -967,35 +1025,80 @@ private final class SpeedTestCell: UITableViewCell {
 
     var onStartTapped: (() -> Void)?
 
+    private let titleLabel = UILabel()
+    private let statusLabel = UILabel()
     private let startButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .medium)
-    private let accessoryContainer = UIStackView()
+    private let topStack = UIStackView()
+    private let rightStack = UIStackView()
+    private let containerStack = UIStackView()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         selectionStyle = .none
         backgroundColor = .clear
 
+        titleLabel.textColor = .white
+        titleLabel.font = UIFont.systemFont(ofSize: 15, weight: .regular)
+
+        statusLabel.textColor = UIColor(white: 0.7, alpha: 1)
+        statusLabel.font = UIFont.systemFont(ofSize: 13, weight: .regular)
+        statusLabel.numberOfLines = 2
+        statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
         var config = UIButton.Configuration.tinted()
         config.cornerStyle = .capsule
         config.baseBackgroundColor = UIColor.systemBlue.withAlphaComponent(0.18)
         config.baseForegroundColor = .systemBlue
         config.title = "开始测速"
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
+            return outgoing
+        }
         startButton.configuration = config
         startButton.addTarget(self, action: #selector(startTapped), for: .touchUpInside)
-        startButton.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
         startButton.accessibilityLabel = "开始测速"
         startButton.accessibilityHint = "点击后将进行约12秒测速"
 
         spinner.hidesWhenStopped = true
         spinner.color = .systemBlue
 
-        accessoryContainer.axis = .horizontal
-        accessoryContainer.alignment = .center
-        accessoryContainer.spacing = 8
-        accessoryContainer.addArrangedSubview(startButton)
-        accessoryContainer.addArrangedSubview(spinner)
-        accessoryView = accessoryContainer
+        rightStack.axis = .horizontal
+        rightStack.alignment = .center
+        rightStack.spacing = 8
+        rightStack.addArrangedSubview(startButton)
+        rightStack.addArrangedSubview(spinner)
+        rightStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+        rightStack.setContentHuggingPriority(.required, for: .horizontal)
+
+        topStack.axis = .horizontal
+        topStack.alignment = .center
+        topStack.distribution = .fill
+        topStack.spacing = 12
+        topStack.addArrangedSubview(titleLabel)
+        topStack.addArrangedSubview(rightStack)
+
+        containerStack.axis = .vertical
+        containerStack.alignment = .fill
+        containerStack.distribution = .fill
+        containerStack.spacing = 4
+        containerStack.translatesAutoresizingMaskIntoConstraints = false
+        containerStack.addArrangedSubview(topStack)
+        containerStack.addArrangedSubview(statusLabel)
+
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        rightStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+        rightStack.setContentHuggingPriority(.required, for: .horizontal)
+
+        contentView.addSubview(containerStack)
+        NSLayoutConstraint.activate([
+            containerStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            containerStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            containerStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            containerStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+        ])
     }
 
     required init?(coder: NSCoder) {
@@ -1014,18 +1117,12 @@ private final class SpeedTestCell: UITableViewCell {
         let down = downloadMbps ?? 0
         let up = uploadMbps ?? 0
         let speedText = String(format: "下载 %.2f Mbps · 上传估算 %.2f Mbps", down, up)
-
-        var content = defaultContentConfiguration()
-        content.text = "网络测速"
-        content.secondaryText = isTesting ? "\(speedText) · 剩余 \(remainingSeconds)s" : statusText
-        content.textProperties.font = UIFont.systemFont(ofSize: 15, weight: .regular)
-        content.secondaryTextProperties.font = UIFont.systemFont(ofSize: 13, weight: .regular)
-        content.secondaryTextProperties.color = UIColor(white: 0.7, alpha: 1)
-        contentConfiguration = content
+        titleLabel.text = "网络测速"
+        statusLabel.text = isTesting ? "\(speedText) · 剩余 \(remainingSeconds)s" : statusText
 
         if isTesting {
-            startButton.configuration?.title = "测速中"
-            startButton.isEnabled = false
+            startButton.configuration?.title = "取消测速"
+            startButton.isEnabled = true
             spinner.startAnimating()
         } else {
             startButton.configuration?.title = "开始测速"
@@ -1048,6 +1145,7 @@ private final class CachedVideosManagementViewController: UIViewController {
     var reloadProvider: (() -> [VideoDiskCache.Entry])?
     var onDeleteEntry: ((VideoDiskCache.Entry) -> Void)?
     var onShareEntry: ((VideoDiskCache.Entry) -> Void)?
+    var onEntrySelected: ((VideoDiskCache.Entry) -> UIViewController?)?
 
     init(entries: [VideoDiskCache.Entry]) {
         self.entries = entries
@@ -1129,7 +1227,7 @@ extension CachedVideosManagementViewController: UITableViewDataSource {
         let reuseID = "CachedVideoManagementCell"
         let cell = tableView.dequeueReusableCell(withIdentifier: reuseID) ?? UITableViewCell(style: .subtitle, reuseIdentifier: reuseID)
         cell.backgroundColor = .clear
-        cell.selectionStyle = .none
+        cell.selectionStyle = entries.isEmpty ? .none : .default
         cell.textLabel?.textColor = .white
         cell.detailTextLabel?.textColor = UIColor(white: 0.72, alpha: 1)
         cell.textLabel?.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
@@ -1189,6 +1287,19 @@ extension CachedVideosManagementViewController: UITableViewDelegate {
             }
             return UIMenu(title: "", children: [share, delete])
         }
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard !entries.isEmpty, entries.indices.contains(indexPath.row) else { return }
+        let entry = entries[indexPath.row]
+        if let controller = onEntrySelected?(entry) {
+            navigationController?.pushViewController(controller, animated: true)
+            return
+        }
+        let alert = UIAlertController(title: "无法播放", message: "无法解析该缓存条目", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        present(alert, animated: true)
     }
 }
 

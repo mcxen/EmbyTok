@@ -20,6 +20,8 @@
 		807C75FD9F944112BF3A1DCB /* PreloadCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F95C67503464043B10E1348 /* PreloadCache.swift */; };
 		8C26D442568D4F49B2F03E71 /* VideoCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E3783D1DF6464887CF4B5C /* VideoCell.swift */; };
 		8D407DA4EEA24A02AF1DB378 /* VideoFeedViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A290181C9545429C36D76E /* VideoFeedViewController.swift */; };
+		A6B7C8D9E0F1122334455667 /* GestureSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C8D9E0F112233445566778 /* GestureSettingsViewController.swift */; };
+		E2F3A4B5C6D7E8F9A0B1C2D3 /* VideoInfoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D0C9A2B3C4D5E6F7A8B9C0 /* VideoInfoViewController.swift */; };
 		97ABC0AAF9BD46AF8B9FEB54 /* EmbyTokWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CDD21F18827428482840841 /* EmbyTokWatchApp.swift */; };
 		9C264715BAF544A99571EDB9 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49CC635ED51642DB9781C362 /* AVFoundation.framework */; };
 		9CCAADB0A0DB49D5AA4DC60E /* ConnectViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99C969545F24619A134CF80 /* ConnectViewController.swift */; };
@@ -53,6 +55,7 @@
 		80C6DECAB3194AEF8124170B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		98272D7CD912459B8D495C71 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A0E3783D1DF6464887CF4B5C /* VideoCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCell.swift; sourceTree = "<group>"; };
+		B7C8D9E0F112233445566778 /* GestureSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureSettingsViewController.swift; sourceTree = "<group>"; };
 		A97B80D28E5F4965B088ACA9 /* WatchConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectView.swift; sourceTree = "<group>"; };
 		C604167B0B7F487D960E067A /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		C99C969545F24619A134CF80 /* ConnectViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectViewController.swift; sourceTree = "<group>"; };
@@ -66,6 +69,7 @@
 		ED4DB37CCBAD421D891E1063 /* WatchAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAPIClient.swift; sourceTree = "<group>"; };
 		F4D986B0D94648C1B2856F29 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		F5742CBE4BAF4617BF32E4A5 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
+		F1D0C9A2B3C4D5E6F7A8B9C0 /* VideoInfoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoInfoViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -96,6 +100,8 @@
 				D1BF4748169747BFB08BB500 /* SceneDelegate.swift */,
 				C99C969545F24619A134CF80 /* ConnectViewController.swift */,
 				54A290181C9545429C36D76E /* VideoFeedViewController.swift */,
+				B7C8D9E0F112233445566778 /* GestureSettingsViewController.swift */,
+				F1D0C9A2B3C4D5E6F7A8B9C0 /* VideoInfoViewController.swift */,
 				A0E3783D1DF6464887CF4B5C /* VideoCell.swift */,
 				EA95D4E781F345F9853F1BC2 /* VideoGridViewController.swift */,
 				2E1837B491A24AD0B329BACE /* VideoGridCell.swift */,
@@ -265,6 +271,8 @@
 				C7769021B736436F93A51010 /* SceneDelegate.swift in Sources */,
 				9CCAADB0A0DB49D5AA4DC60E /* ConnectViewController.swift in Sources */,
 				8D407DA4EEA24A02AF1DB378 /* VideoFeedViewController.swift in Sources */,
+				A6B7C8D9E0F1122334455667 /* GestureSettingsViewController.swift in Sources */,
+				E2F3A4B5C6D7E8F9A0B1C2D3 /* VideoInfoViewController.swift in Sources */,
 				8C26D442568D4F49B2F03E71 /* VideoCell.swift in Sources */,
 				5AD71A599251415B8A00AA9C /* VideoGridViewController.swift in Sources */,
 				ADF4E492D9DE4D9F99DBBDFA /* VideoGridCell.swift in Sources */,

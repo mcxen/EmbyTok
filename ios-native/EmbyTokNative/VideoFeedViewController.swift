@@ -1,8 +1,14 @@
 import UIKit
 
 final class VideoFeedViewController: UIViewController {
+    enum VideoFeedMode {
+        case standard
+        case cached
+    }
+
     private let client: APIClient
     private let config: ServerConfig
+    private let mode: VideoFeedMode
 
     private var items: [VideoItem] = []
     private var isLoading = false
@@ -20,6 +26,7 @@ final class VideoFeedViewController: UIViewController {
     private let spinner = UIActivityIndicatorView(style: .large)
     private var preloadWorkItem: DispatchWorkItem?
     private var memoryWarningObserver: NSObjectProtocol?
+    private var gestureSettingsObserver: NSObjectProtocol?
 
     private var activeIndex: Int = 0
     private let initialIndex: Int
@@ -39,9 +46,18 @@ final class VideoFeedViewController: UIViewController {
         case neutral
     }
 
-    init(client: APIClient, config: ServerConfig, initialItems: [VideoItem], totalCount: Int, nextStartIndex: Int, initialIndex: Int = 0) {
+    init(
+        client: APIClient,
+        config: ServerConfig,
+        initialItems: [VideoItem],
+        totalCount: Int,
+        nextStartIndex: Int,
+        initialIndex: Int = 0,
+        mode: VideoFeedMode = .standard
+    ) {
         self.client = client
         self.config = config
+        self.mode = mode
         self.items = initialItems
         self.totalCount = totalCount
         self.nextStartIndex = nextStartIndex
@@ -76,14 +92,26 @@ final class VideoFeedViewController: UIViewController {
         if let observer = memoryWarningObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = gestureSettingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        title = "视频"
-        navigationItem.rightBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "square.grid.2x2"), style: .plain, target: self, action: #selector(openGrid))
-        navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "line.3.horizontal"), style: .plain, target: self, action: #selector(openMenu))
+        switch mode {
+        case .standard:
+            title = "视频"
+            let infoButton = UIBarButtonItem(image: UIImage(systemName: "info.circle"), style: .plain, target: self, action: #selector(openInfo))
+            let gridButton = UIBarButtonItem(image: UIImage(systemName: "square.grid.2x2"), style: .plain, target: self, action: #selector(openGrid))
+            navigationItem.rightBarButtonItems = [infoButton, gridButton]
+            navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "line.3.horizontal"), style: .plain, target: self, action: #selector(openMenu))
+        case .cached:
+            title = "已缓存视频"
+            navigationItem.rightBarButtonItems = nil
+            navigationItem.leftBarButtonItem = nil
+        }
 
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.backgroundColor = .black
@@ -117,6 +145,14 @@ final class VideoFeedViewController: UIViewController {
             queue: .main
         ) { [weak self] _ in
             self?.handleMemoryPressure()
+        }
+
+        gestureSettingsObserver = NotificationCenter.default.addObserver(
+            forName: GestureSettings.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshVisibleGestureSettings()
         }
     }
 
@@ -206,6 +242,7 @@ final class VideoFeedViewController: UIViewController {
     }
 
     private func maybeLoadMore() {
+        guard mode == .standard else { return }
         let threshold = max(0, items.count - (Self.forwardPreloadCount + 1))
         guard !isLoading, items.count < totalCount, activeIndex >= threshold else { return }
         loadMore()
@@ -298,6 +335,12 @@ final class VideoFeedViewController: UIViewController {
         }
     }
 
+    private func refreshVisibleGestureSettings() {
+        for visible in collectionView.visibleCells {
+            (visible as? VideoCell)?.refreshGestureAvailability()
+        }
+    }
+
     private func persistFavoriteIDs() {
         UserDefaults.standard.set(Array(favoriteIDs).sorted(), forKey: Self.favoriteIDsKey)
     }
@@ -372,7 +415,11 @@ final class VideoFeedViewController: UIViewController {
     }
 
     @objc private func openMenu() {
+        guard mode == .standard else { return }
         let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "查看收藏", style: .default) { [weak self] _ in
+            self?.openFavorites()
+        })
         sheet.addAction(UIAlertAction(title: "设置", style: .default) { [weak self] _ in
             self?.openSettings()
         })
@@ -397,12 +444,73 @@ final class VideoFeedViewController: UIViewController {
     }
 
     @objc private func openGrid() {
-        let grid = VideoGridViewController(client: client, config: config, items: items, totalCount: totalCount, nextStartIndex: nextStartIndex)
+        guard mode == .standard else { return }
+        let grid = VideoGridViewController(
+            client: client,
+            config: config,
+            items: items,
+            totalCount: totalCount,
+            nextStartIndex: nextStartIndex,
+            initialIndex: activeIndex
+        )
         grid.onSelect = { [weak self] index in
             self?.scrollToIndex(index, animated: false)
         }
         grid.onDataUpdated = { [weak self] newItems, total, nextStart in
             self?.appendItems(newItems, totalCount: total, nextStartIndex: nextStart)
+        }
+        navigationController?.pushViewController(grid, animated: true)
+    }
+
+    @objc private func openInfo() {
+        guard mode == .standard, !items.isEmpty else { return }
+        let safeIndex = max(0, min(activeIndex, items.count - 1))
+        let item = items[safeIndex]
+        let remoteURL = client.videoURL(for: item, config: config)
+        let info = VideoInfoViewController(
+            itemID: item.id,
+            name: item.name,
+            filePath: item.filePath,
+            sizeBytes: item.sizeBytes,
+            isFavorite: favoriteIDs.contains(item.id),
+            serverType: config.serverType,
+            remoteURL: remoteURL
+        )
+        info.onToggleFavorite = { [weak self] itemID, nextFavorite in
+            self?.setFavorite(nextFavorite, for: itemID)
+            self?.refreshVisibleFavoriteIndicators()
+        }
+        info.onRenameRequested = { [weak self] itemID, newName, completion in
+            self?.handleRename(itemID: itemID, newName: newName, completion: completion)
+        }
+        let navigation = UINavigationController(rootViewController: info)
+        navigation.overrideUserInterfaceStyle = .dark
+        if let sheet = navigation.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.selectedDetentIdentifier = .medium
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 20
+        }
+        present(navigation, animated: true)
+    }
+
+    private func openFavorites() {
+        let favorites = items.filter { favoriteIDs.contains($0.id) }
+        let grid = VideoGridViewController(
+            client: client,
+            config: config,
+            items: favorites,
+            totalCount: favorites.count,
+            nextStartIndex: favorites.count,
+            titleText: "收藏",
+            allowsLoadMore: false
+        )
+        grid.onSelect = { [weak self] index in
+            guard let self = self, index < favorites.count else { return }
+            let selectedID = favorites[index].id
+            if let targetIndex = self.items.firstIndex(where: { $0.id == selectedID }) {
+                self.scrollToIndex(targetIndex, animated: false)
+            }
         }
         navigationController?.pushViewController(grid, animated: true)
     }
@@ -478,19 +586,6 @@ final class VideoFeedViewController: UIViewController {
             UserDefaults.standard.set(count, forKey: Self.cacheCountKey)
             UserDefaults.standard.set(serverType.rawValue, forKey: "embytok.serverType")
         }
-        settings.favoriteItemsProvider = { [weak self] in
-            self?.favoriteRecordsForSettings() ?? []
-        }
-        settings.onFavoriteRemoved = { [weak self] favoriteID in
-            self?.setFavorite(false, for: favoriteID)
-            self?.refreshVisibleFavoriteIndicators()
-        }
-        settings.onFavoriteSelected = { [weak self] favoriteID in
-            guard let self = self else { return }
-            if let index = self.items.firstIndex(where: { $0.id == favoriteID }) {
-                self.scrollToIndex(index, animated: false)
-            }
-        }
         settings.speedTestURLProvider = { [weak self] in
             guard let self = self, !self.items.isEmpty else { return nil }
             let safeIndex = max(0, min(self.activeIndex, self.items.count - 1))
@@ -498,6 +593,9 @@ final class VideoFeedViewController: UIViewController {
             return self.client.videoURL(for: current, config: self.config)
         }
         settings.refreshCachedVideos(cachedEntriesForSettings())
+        settings.onCachedEntrySelected = { [weak self] entry in
+            return self?.cachedPlaybackController(startingAt: entry)
+        }
 
         if let sheet = settings.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
@@ -508,6 +606,113 @@ final class VideoFeedViewController: UIViewController {
         }
 
         present(settings, animated: true)
+    }
+
+    private func handleRename(
+        itemID: String,
+        newName: String,
+        completion: @escaping (Result<VideoInfoRenameResult, Error>) -> Void
+    ) {
+        guard config.serverType == .folder else {
+            completion(.failure(NSError(domain: "VideoInfo", code: -1, userInfo: [NSLocalizedDescriptionKey: "当前数据源不支持改名"])))
+            return
+        }
+        client.renameFolderVideo(config: config, itemId: itemID, newName: newName) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .success(let response):
+                    guard let index = self.items.firstIndex(where: { $0.id == itemID }) else {
+                        completion(.failure(NSError(domain: "VideoInfo", code: -2, userInfo: [NSLocalizedDescriptionKey: "未找到对应的视频"])))
+                        return
+                    }
+                    let oldItem = self.items[index]
+                    let updated = VideoItem(
+                        id: response.id,
+                        name: response.name,
+                        overview: response.relPath,
+                        width: oldItem.width,
+                        height: oldItem.height,
+                        primaryImageTag: oldItem.primaryImageTag,
+                        durationSeconds: oldItem.durationSeconds,
+                        sizeBytes: oldItem.sizeBytes,
+                        filePath: response.relPath
+                    )
+                    self.items[index] = updated
+
+                    if self.favoriteIDs.contains(itemID) {
+                        self.favoriteIDs.remove(itemID)
+                        self.favoriteIDs.insert(response.id)
+                        self.persistFavoriteIDs()
+                        self.refreshVisibleFavoriteIndicators()
+                    }
+
+                    if let oldURL = self.client.videoURL(for: oldItem, config: self.config),
+                       let newURL = self.client.videoURL(for: updated, config: self.config) {
+                        VideoDiskCache.shared.updateRemoteURL(
+                            oldRemoteURL: oldURL.absoluteString,
+                            newRemoteURL: newURL.absoluteString,
+                            newName: response.name
+                        )
+                    }
+
+                    self.preloadCache.clear()
+                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    self.activeSettingsViewController?.refreshCachedVideos(self.cachedEntriesForSettings())
+                    completion(.success(VideoInfoRenameResult(id: response.id, name: response.name, filePath: response.relPath)))
+                case .failure(let error):
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    private func cachedPlaybackController(startingAt entry: VideoDiskCache.Entry) -> UIViewController? {
+        let entries = cachedEntriesForSettings()
+        let items = cachedVideoItems(from: entries)
+        guard !items.isEmpty else { return nil }
+        guard let selectedID = cachedItemID(from: entry),
+              let targetIndex = items.firstIndex(where: { $0.id == selectedID }) else {
+            return nil
+        }
+        return VideoFeedViewController(
+            client: client,
+            config: config,
+            initialItems: items,
+            totalCount: items.count,
+            nextStartIndex: items.count,
+            initialIndex: targetIndex,
+            mode: .cached
+        )
+    }
+
+    private func cachedVideoItems(from entries: [VideoDiskCache.Entry]) -> [VideoItem] {
+        return entries.compactMap { entry in
+            guard let id = cachedItemID(from: entry) else { return nil }
+            return VideoItem(
+                id: id,
+                name: entry.name,
+                overview: "",
+                width: nil,
+                height: nil,
+                primaryImageTag: nil,
+                durationSeconds: nil,
+                sizeBytes: entry.sizeBytes,
+                filePath: nil
+            )
+        }
+    }
+
+    private func cachedItemID(from entry: VideoDiskCache.Entry) -> String? {
+        guard let url = URL(string: entry.remoteURL) else { return nil }
+        let components = url.path.split(separator: "/").map { String($0) }
+        if let videosIndex = components.firstIndex(of: "Videos"), components.count > videosIndex + 1 {
+            return components[videosIndex + 1]
+        }
+        if let streamIndex = components.firstIndex(of: "stream"), components.count > streamIndex + 1 {
+            return components[streamIndex + 1]
+        }
+        return nil
     }
 }
 

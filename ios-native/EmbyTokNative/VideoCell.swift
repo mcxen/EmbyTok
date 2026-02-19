@@ -8,6 +8,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private static let floatingIconPointSize: CGFloat = 12
     private static let floatingStackVerticalOffset: CGFloat = 56
     private static let overlayAutoHideDelay: TimeInterval = 8
+    private static let swipeSeekStepSeconds: Double = 10
 
     private let playerView = PlayerView()
     private let titleLabel = UILabel()
@@ -26,6 +27,8 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private let rotateButton = UIButton(type: .system)
     private let pureModeButton = UIButton(type: .system)
     private let muteButton = UIButton(type: .system)
+    private let muteHintView = UIView()
+    private let muteHintLabel = UILabel()
 
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
@@ -49,10 +52,20 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     private var shouldResumeAfterSeek = false
     private var isFavorite = false
     private var currentVideoSizeBytes: Int64?
+    private var currentVideoSize: CGSize?
     private var floatingStackCenterYConstraint: NSLayoutConstraint?
     private var pureModeBottomConstraint: NSLayoutConstraint?
     private var overlayHideWorkItem: DispatchWorkItem?
+    private var muteHintWorkItem: DispatchWorkItem?
     private var playbackToken = UUID()
+    private let muteFeedback = UIImpactFeedbackGenerator(style: .light)
+    private let pureModeFeedback = UIImpactFeedbackGenerator(style: .light)
+    private let sideButtonFeedback = UIImpactFeedbackGenerator(style: .light)
+    private var pinchGesture: UIPinchGestureRecognizer?
+    private var twoFingerTapGesture: UITapGestureRecognizer?
+    private var twoFingerDoubleTapGesture: UITapGestureRecognizer?
+    private var swipeLeftGesture: UISwipeGestureRecognizer?
+    private var swipeRightGesture: UISwipeGestureRecognizer?
 
     var onToggleMute: (() -> Void)?
     var onTogglePureMode: (() -> Void)?
@@ -165,6 +178,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         floatingStack.addArrangedSubview(rotateButton)
         floatingStack.addArrangedSubview(randomButton)
         contentView.addSubview(pureModeButton)
+        contentView.addSubview(muteHintView)
 
         NSLayoutConstraint.activate([
             playerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -221,13 +235,75 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             pureModeBottomConstraint!
         ])
 
+        muteHintView.translatesAutoresizingMaskIntoConstraints = false
+        muteHintView.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        muteHintView.layer.cornerRadius = 10
+        muteHintView.isHidden = true
+        muteHintView.alpha = 0
+
+        muteHintLabel.translatesAutoresizingMaskIntoConstraints = false
+        muteHintLabel.textColor = .white
+        muteHintLabel.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
+        muteHintLabel.numberOfLines = 1
+        muteHintView.addSubview(muteHintLabel)
+
+        NSLayoutConstraint.activate([
+            muteHintLabel.leadingAnchor.constraint(equalTo: muteHintView.leadingAnchor, constant: 8),
+            muteHintLabel.trailingAnchor.constraint(equalTo: muteHintView.trailingAnchor, constant: -8),
+            muteHintLabel.topAnchor.constraint(equalTo: muteHintView.topAnchor, constant: 4),
+            muteHintLabel.bottomAnchor.constraint(equalTo: muteHintView.bottomAnchor, constant: -4),
+
+            muteHintView.centerYAnchor.constraint(equalTo: muteButton.centerYAnchor),
+            muteHintView.trailingAnchor.constraint(equalTo: muteButton.leadingAnchor, constant: -8),
+            muteHintView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 12)
+        ])
+
         controlsContainer.alpha = 0
         controlsContainer.isHidden = true
 
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tapGesture.cancelsTouchesInView = false
         tapGesture.delegate = self
+
+        let twoFingerDoubleTap = UITapGestureRecognizer(target: self, action: #selector(handleTwoFingerTap))
+        twoFingerDoubleTap.numberOfTouchesRequired = 2
+        twoFingerDoubleTap.numberOfTapsRequired = 2
+        twoFingerDoubleTap.cancelsTouchesInView = false
+        twoFingerDoubleTap.delegate = self
+
+        let twoFingerTap = UITapGestureRecognizer(target: self, action: #selector(handleTwoFingerTap))
+        twoFingerTap.numberOfTouchesRequired = 2
+        twoFingerTap.cancelsTouchesInView = false
+        twoFingerTap.delegate = self
+        twoFingerTap.require(toFail: twoFingerDoubleTap)
+        tapGesture.require(toFail: twoFingerTap)
+
+        self.twoFingerTapGesture = twoFingerTap
+        self.twoFingerDoubleTapGesture = twoFingerDoubleTap
+
         contentView.addGestureRecognizer(tapGesture)
+        contentView.addGestureRecognizer(twoFingerTap)
+        contentView.addGestureRecognizer(twoFingerDoubleTap)
+
+        let pinchGesture = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch))
+        pinchGesture.cancelsTouchesInView = false
+        pinchGesture.delegate = self
+        self.pinchGesture = pinchGesture
+        contentView.addGestureRecognizer(pinchGesture)
+
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handlePureModeSwipe))
+        swipeLeft.direction = .left
+        swipeLeft.cancelsTouchesInView = false
+        swipeLeft.delegate = self
+        self.swipeLeftGesture = swipeLeft
+        contentView.addGestureRecognizer(swipeLeft)
+
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handlePureModeSwipe))
+        swipeRight.direction = .right
+        swipeRight.cancelsTouchesInView = false
+        swipeRight.delegate = self
+        self.swipeRightGesture = swipeRight
+        contentView.addGestureRecognizer(swipeRight)
     }
 
     required init?(coder: NSCoder) {
@@ -272,6 +348,11 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         cacheSizeLabel.text = "--"
         isFavorite = false
         currentVideoSizeBytes = nil
+        currentVideoSize = nil
+        muteHintWorkItem?.cancel()
+        muteHintWorkItem = nil
+        muteHintView.alpha = 0
+        muteHintView.isHidden = true
         updateFavoriteIcon()
         setManualCacheState(cached: false, caching: false)
         applyRotation()
@@ -310,6 +391,11 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         currentVideoName = item.name
         isCachingVideo = false
         currentVideoSizeBytes = item.sizeBytes
+        if let width = item.width, let height = item.height, width > 0, height > 0 {
+            currentVideoSize = CGSize(width: CGFloat(width), height: CGFloat(height))
+        } else {
+            currentVideoSize = nil
+        }
         self.isFavorite = isFavorite
         cacheInfoToken = UUID()
         sizeProbeWorkItem?.cancel()
@@ -379,6 +465,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             attachTimeObserver()
             attachLoopObserver()
             updateDuration()
+            updatePresentationSizeIfNeeded()
             updatePlayPauseIcon()
             updateMuteIcon()
         }
@@ -454,6 +541,7 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         titleLabel.isHidden = pure
         if pure {
             hidePlaybackOverlay(animated: false)
+            hideMuteHint(animated: false)
         } else {
             showPlaybackOverlay(animated: false, autoHide: false)
         }
@@ -467,6 +555,20 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         let iconName = pure ? "eye" : "eye.slash"
         pureModeButton.setImage(UIImage(systemName: iconName), for: .normal)
         pureModeBottomConstraint?.constant = pure ? -40 : -44
+        refreshGestureAvailability()
+    }
+
+    func refreshGestureAvailability() {
+        let pinchEnabled = GestureSettings.isPinchPureModeEnabled
+        pinchGesture?.isEnabled = pinchEnabled
+
+        let twoFingerEnabled = GestureSettings.isTwoFingerMuteEnabled
+        twoFingerTapGesture?.isEnabled = twoFingerEnabled
+        twoFingerDoubleTapGesture?.isEnabled = twoFingerEnabled
+
+        let swipeEnabled = GestureSettings.isPureModeSwipeSeekEnabled && isPureMode
+        swipeLeftGesture?.isEnabled = swipeEnabled
+        swipeRightGesture?.isEnabled = swipeEnabled
     }
 
     func applyFavoriteState(_ favorite: Bool) {
@@ -486,6 +588,15 @@ final class VideoCell: UICollectionViewCell, UIGestureRecognizerDelegate {
 
 extension VideoCell {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        if gestureRecognizer is UIPinchGestureRecognizer {
+            return true
+        }
+        if let tap = gestureRecognizer as? UITapGestureRecognizer, tap.numberOfTouchesRequired == 2 {
+            return true
+        }
+        if gestureRecognizer is UISwipeGestureRecognizer {
+            return true
+        }
         let touchedView = touch.view
         if touchedView is UIControl { return false }
         if let touchedView = touchedView, touchedView.isDescendant(of: controlsContainer) {
@@ -698,6 +809,7 @@ private extension VideoCell {
             if layer.isReadyForDisplay {
                 self.posterView.isHidden = true
                 self.hasRenderedFirstFrame = true
+                self.updatePresentationSizeIfNeeded()
             } else if !self.hasRenderedFirstFrame, self.posterView.image != nil {
                 self.posterView.isHidden = false
             }
@@ -705,6 +817,7 @@ private extension VideoCell {
     }
 
     @objc func rotateTapped() {
+        sideButtonFeedback.impactOccurred()
         rotationAngle += CGFloat.pi / 2
         if rotationAngle >= CGFloat.pi * 2 {
             rotationAngle = 0
@@ -718,7 +831,15 @@ private extension VideoCell {
         let bounds = contentView.bounds
         var scale: CGFloat = 1
         if isRotated, bounds.width > 0, bounds.height > 0 {
-            scale = min(bounds.width / bounds.height, bounds.height / bounds.width)
+            let videoSize = currentVideoSize ?? playerItem?.presentationSize ?? bounds.size
+            let fitted = aspectFitSize(videoSize, in: bounds.size)
+            if fitted.width > 0, fitted.height > 0 {
+                let rotatedSize = CGSize(width: fitted.height, height: fitted.width)
+                scale = min(bounds.width / rotatedSize.width, bounds.height / rotatedSize.height)
+            } else {
+                let ratio = bounds.width / bounds.height
+                scale = min(ratio, 1 / ratio)
+            }
         }
         let transform = CGAffineTransform(rotationAngle: normalized).scaledBy(x: scale, y: scale)
         playerView.transform = transform
@@ -726,25 +847,126 @@ private extension VideoCell {
         playerView.playerLayer.videoGravity = .resizeAspect
     }
 
+    private func aspectFitSize(_ size: CGSize, in bounds: CGSize) -> CGSize {
+        guard size.width > 0, size.height > 0, bounds.width > 0, bounds.height > 0 else {
+            return bounds
+        }
+        let widthRatio = bounds.width / size.width
+        let heightRatio = bounds.height / size.height
+        let scale = min(widthRatio, heightRatio)
+        return CGSize(width: size.width * scale, height: size.height * scale)
+    }
+
+    private func updatePresentationSizeIfNeeded() {
+        guard let size = playerItem?.presentationSize, size.width > 0, size.height > 0 else { return }
+        let newSize = CGSize(width: size.width, height: size.height)
+        if currentVideoSize == nil || currentVideoSize != newSize {
+            currentVideoSize = newSize
+            applyRotation()
+        }
+    }
+
     @objc func pureModeTapped() {
+        sideButtonFeedback.impactOccurred()
         onTogglePureMode?()
     }
 
+    @objc private func handleTwoFingerTap(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended else { return }
+        guard GestureSettings.isTwoFingerMuteEnabled else { return }
+        let nextMuted = !isMuted
+        muteFeedback.impactOccurred()
+        onToggleMute?()
+        showMuteHint(isMuted: nextMuted)
+    }
+
+    @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+        guard GestureSettings.isPinchPureModeEnabled else { return }
+        switch gesture.state {
+        case .began:
+            pureModeFeedback.prepare()
+        case .ended, .cancelled, .failed:
+            let scale = gesture.scale
+            if scale >= 1.1, !isPureMode {
+                pureModeFeedback.impactOccurred()
+                onTogglePureMode?()
+            } else if scale <= 0.9, isPureMode {
+                pureModeFeedback.impactOccurred()
+                onTogglePureMode?()
+            }
+        default:
+            break
+        }
+    }
+
+    @objc private func handlePureModeSwipe(_ gesture: UISwipeGestureRecognizer) {
+        guard GestureSettings.isPureModeSwipeSeekEnabled, isPureMode else { return }
+        let delta = gesture.direction == .left ? -Self.swipeSeekStepSeconds : Self.swipeSeekStepSeconds
+        seekBySeconds(delta)
+    }
+
+    private func seekBySeconds(_ delta: Double) {
+        guard let player = player, let item = playerItem else { return }
+        let duration = item.duration.seconds
+        guard duration.isFinite, duration > 0 else { return }
+        let current = player.currentTime().seconds
+        let target = min(max(0, current + delta), duration)
+        let time = CMTime(seconds: target, preferredTimescale: 600)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        progressSlider.value = Float(target)
+        currentTimeLabel.text = formattedPlaybackTime(target)
+    }
+
+    private func showMuteHint(isMuted: Bool) {
+        muteHintWorkItem?.cancel()
+        muteHintLabel.text = isMuted ? "已静音" : "已开启声音"
+        muteHintView.isHidden = false
+        UIView.animate(withDuration: 0.2) {
+            self.muteHintView.alpha = 1
+        }
+        let work = DispatchWorkItem { [weak self] in
+            self?.hideMuteHint(animated: true)
+        }
+        muteHintWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
+    }
+
+    private func hideMuteHint(animated: Bool) {
+        muteHintWorkItem?.cancel()
+        muteHintWorkItem = nil
+        let changes = {
+            self.muteHintView.alpha = 0
+        }
+        let completion: (Bool) -> Void = { _ in
+            self.muteHintView.isHidden = true
+        }
+        if animated {
+            UIView.animate(withDuration: 0.25, animations: changes, completion: completion)
+        } else {
+            changes()
+            completion(true)
+        }
+    }
+
     @objc func muteTapped() {
+        sideButtonFeedback.impactOccurred()
         onToggleMute?()
     }
 
     @objc func favoriteTapped() {
+        sideButtonFeedback.impactOccurred()
         isFavorite.toggle()
         updateFavoriteIcon()
         onToggleFavorite?(isFavorite)
     }
 
     @objc func randomTapped() {
+        sideButtonFeedback.impactOccurred()
         onRandomRequested?()
     }
 
     @objc func cacheTapped() {
+        sideButtonFeedback.impactOccurred()
         guard let remoteURL = currentRemoteVideoURL, let name = currentVideoName else { return }
         if VideoDiskCache.shared.cachedFileURL(for: remoteURL) != nil {
             refreshCacheUIForCurrentVideo(fetchRemoteSize: false)

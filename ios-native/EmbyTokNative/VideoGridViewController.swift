@@ -17,6 +17,10 @@ final class VideoGridViewController: UIViewController {
     private var isLoading = false
     private var lastLayoutWidth: CGFloat = 0
     private var displayMode: DisplayMode
+    private let titleText: String
+    private let allowsLoadMore: Bool
+    private let initialIndex: Int?
+    private var hasScrolledToInitialIndex = false
 
     var onSelect: ((Int) -> Void)?
     var onDataUpdated: (([VideoItem], Int, Int) -> Void)?
@@ -25,12 +29,24 @@ final class VideoGridViewController: UIViewController {
     private let spinner = UIActivityIndicatorView(style: .large)
     private let modeControl = UISegmentedControl(items: ["卡片", "列表"])
 
-    init(client: APIClient, config: ServerConfig, items: [VideoItem], totalCount: Int, nextStartIndex: Int) {
+    init(
+        client: APIClient,
+        config: ServerConfig,
+        items: [VideoItem],
+        totalCount: Int,
+        nextStartIndex: Int,
+        titleText: String = "全部视频",
+        allowsLoadMore: Bool = true,
+        initialIndex: Int? = nil
+    ) {
         self.client = client
         self.config = config
         self.items = items
         self.totalCount = totalCount
         self.nextStartIndex = nextStartIndex
+        self.titleText = titleText
+        self.allowsLoadMore = allowsLoadMore
+        self.initialIndex = initialIndex
         if let stored = UserDefaults.standard.object(forKey: Self.displayModeKey) as? Int,
            let mode = DisplayMode(rawValue: stored) {
             self.displayMode = mode
@@ -54,7 +70,7 @@ final class VideoGridViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        title = "全部视频"
+        title = titleText
         modeControl.selectedSegmentIndex = displayMode.rawValue
         modeControl.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
         navigationItem.rightBarButtonItem = UIBarButtonItem(customView: modeControl)
@@ -93,6 +109,19 @@ final class VideoGridViewController: UIViewController {
         }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        scrollToInitialIndexIfNeeded()
+    }
+
+    private func scrollToInitialIndexIfNeeded() {
+        guard !hasScrolledToInitialIndex else { return }
+        guard let index = initialIndex, index >= 0, index < items.count else { return }
+        hasScrolledToInitialIndex = true
+        collectionView.layoutIfNeeded()
+        collectionView.scrollToItem(at: IndexPath(item: index, section: 0), at: .centeredVertically, animated: false)
+    }
+
     @objc private func modeChanged() {
         let selected = DisplayMode(rawValue: modeControl.selectedSegmentIndex) ?? .grid
         guard selected != displayMode else { return }
@@ -119,6 +148,7 @@ final class VideoGridViewController: UIViewController {
     }
 
     private func loadMoreIfNeeded(for index: Int) {
+        guard allowsLoadMore else { return }
         guard !isLoading, items.count < totalCount, index >= items.count - 8 else { return }
         loadMore()
     }

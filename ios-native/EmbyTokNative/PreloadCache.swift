@@ -174,6 +174,14 @@ final class VideoDiskCache {
     }
 
     func cachedFileURL(for remoteURL: URL) -> URL? {
+        let key = remoteURL.absoluteString
+        if let entry = stateQueue.sync(execute: {
+            loadManifestLockedIfNeeded()
+            return entriesByURL[key]
+        }) {
+            let fileURL = cacheDirectory.appendingPathComponent(entry.localFilename)
+            return fileManager.fileExists(atPath: fileURL.path) ? fileURL : nil
+        }
         let direct = localFileURL(for: remoteURL)
         guard fileManager.fileExists(atPath: direct.path) else { return nil }
         return direct
@@ -181,7 +189,10 @@ final class VideoDiskCache {
 
     func cachedSizeBytes(for remoteURL: URL) -> Int64? {
         let key = remoteURL.absoluteString
-        if let fromEntry = stateQueue.sync(execute: { entriesByURL[key]?.sizeBytes }), fromEntry > 0 {
+        if let fromEntry = stateQueue.sync(execute: {
+            loadManifestLockedIfNeeded()
+            return entriesByURL[key]?.sizeBytes
+        }), fromEntry > 0 {
             return fromEntry
         }
         return fileSize(at: localFileURL(for: remoteURL))
@@ -241,6 +252,24 @@ final class VideoDiskCache {
                 saveManifestLocked()
             }
             return entriesByURL.values.sorted { $0.updatedAt > $1.updatedAt }
+        }
+    }
+
+    func updateRemoteURL(oldRemoteURL: String, newRemoteURL: String, newName: String?) {
+        stateQueue.sync {
+            loadManifestLockedIfNeeded()
+            guard let entry = entriesByURL[oldRemoteURL] else { return }
+            entriesByURL.removeValue(forKey: oldRemoteURL)
+            remoteSizeCache[newRemoteURL] = remoteSizeCache.removeValue(forKey: oldRemoteURL)
+            let updated = Entry(
+                remoteURL: newRemoteURL,
+                name: newName ?? entry.name,
+                sizeBytes: entry.sizeBytes,
+                localFilename: entry.localFilename,
+                updatedAt: Date().timeIntervalSince1970
+            )
+            entriesByURL[newRemoteURL] = updated
+            saveManifestLocked()
         }
     }
 

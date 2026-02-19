@@ -716,6 +716,91 @@ const handleFolderApi = async (req, res, urlObj) => {
     return true;
   }
 
+  if (urlObj.pathname === '/api/folder/rename' && req.method === 'POST') {
+    const { requestedId, service } = resolveRequestedService(urlObj);
+    if (!service) {
+      json(res, 404, { error: 'Service not found', requestedId });
+      return true;
+    }
+
+    let body;
+    try {
+      body = await parseBody(req);
+    } catch (error) {
+      json(res, 400, { error: error.message });
+      return true;
+    }
+
+    const id = sanitizeName(body.id);
+    const rawName = sanitizeName(body.name);
+    if (!id || !rawName) {
+      json(res, 400, { error: 'id and name are required' });
+      return true;
+    }
+    if (rawName.includes('/') || rawName.includes('\\')) {
+      json(res, 400, { error: 'name must not include path separators' });
+      return true;
+    }
+
+    const safeName = path.parse(rawName).name.trim();
+    if (!safeName) {
+      json(res, 400, { error: 'name is invalid' });
+      return true;
+    }
+
+    await ensureScanned(service.id);
+    const scan = getScanState(service.id);
+    const record = scan.itemMap.get(id);
+    if (!record) {
+      json(res, 404, { error: 'Video not found' });
+      return true;
+    }
+
+    if (safeName === record.name) {
+      json(res, 200, { ok: true, id: record.id, name: record.name, relPath: record.relPath });
+      return true;
+    }
+
+    const newFilename = `${safeName}${record.ext}`;
+    const newAbsPath = path.join(path.dirname(record.absPath), newFilename);
+    if (newAbsPath !== record.absPath && fs.existsSync(newAbsPath)) {
+      json(res, 409, { error: 'Target file already exists' });
+      return true;
+    }
+
+    try {
+      await fsp.rename(record.absPath, newAbsPath);
+    } catch (error) {
+      json(res, 500, { error: error.message || 'Rename failed' });
+      return true;
+    }
+
+    let stat;
+    try {
+      stat = await fsp.stat(newAbsPath);
+    } catch {
+      stat = null;
+    }
+
+    const relDir = path.posix.dirname(record.relPath);
+    const newRelPath = relDir === '.' ? newFilename : path.posix.join(relDir, newFilename);
+    const newId = buildVideoId(service.id, newRelPath);
+    const oldId = record.id;
+
+    record.id = newId;
+    record.name = safeName;
+    record.relPath = newRelPath;
+    record.absPath = newAbsPath;
+    record.size = stat?.size ?? record.size;
+    record.mtimeMs = stat?.mtimeMs ?? record.mtimeMs;
+
+    scan.itemMap.delete(oldId);
+    scan.itemMap.set(newId, record);
+
+    json(res, 200, { ok: true, id: newId, name: safeName, relPath: newRelPath });
+    return true;
+  }
+
   if (urlObj.pathname === '/api/folder/videos' && req.method === 'GET') {
     const { requestedId, service } = resolveRequestedService(urlObj);
     if (!service) {

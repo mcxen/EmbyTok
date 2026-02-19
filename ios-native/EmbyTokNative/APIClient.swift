@@ -37,6 +37,66 @@ final class APIClient {
         }
     }
 
+    struct FolderRenameResponse: Decodable {
+        let ok: Bool
+        let id: String
+        let name: String
+        let relPath: String
+    }
+
+    func renameFolderVideo(
+        config: ServerConfig,
+        itemId: String,
+        newName: String,
+        completion: @escaping (Result<FolderRenameResponse, Error>) -> Void
+    ) {
+        guard config.serverType == .folder else {
+            completion(.failure(APIError.unsupportedOperation))
+            return
+        }
+
+        let url = config.baseURL.appendingPathComponent("/api/folder/rename")
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            completion(.failure(APIError.badURL))
+            return
+        }
+        components.queryItems = [URLQueryItem(name: "serviceId", value: config.token)]
+        guard let finalURL = components.url else {
+            completion(.failure(APIError.badURL))
+            return
+        }
+
+        var request = URLRequest(url: finalURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "id": itemId,
+            "name": newName
+        ])
+
+        session.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard
+                let data = data,
+                let http = response as? HTTPURLResponse,
+                http.statusCode >= 200 && http.statusCode < 300
+            else {
+                completion(.failure(APIError.requestFailed))
+                return
+            }
+
+            do {
+                let decoded = try JSONDecoder().decode(FolderRenameResponse.self, from: data)
+                completion(.success(decoded))
+            } catch {
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+
     func videoURL(for item: VideoItem, config: ServerConfig) -> URL? {
         switch config.serverType {
         case .emby:
@@ -106,6 +166,7 @@ private extension APIClient {
         struct EmbyMediaSource: Decodable {
             let RunTimeTicks: Int64?
             let Size: Int64?
+            let Path: String?
         }
 
         struct EmbyImageTags: Decodable {
@@ -367,7 +428,8 @@ private extension APIClient {
                         height: item.Height,
                         primaryImageTag: item.ImageTags?.Primary,
                         durationSeconds: durationSeconds,
-                        sizeBytes: sizeBytes
+                        sizeBytes: sizeBytes,
+                        filePath: item.MediaSources?.first?.Path
                     )
                 }
                 let total = decoded.TotalRecordCount ?? items.count
@@ -427,7 +489,8 @@ private extension APIClient {
                         height: nil,
                         primaryImageTag: nil,
                         durationSeconds: item.durationSeconds,
-                        sizeBytes: item.sizeBytes
+                        sizeBytes: item.sizeBytes,
+                        filePath: item.Overview
                     )
                 }
                 let total = decoded.totalCount ?? items.count
@@ -454,6 +517,7 @@ enum APIError: LocalizedError {
     case badURL
     case requestFailed
     case noFolderService
+    case unsupportedOperation
 
     var errorDescription: String? {
         switch self {
@@ -463,6 +527,8 @@ enum APIError: LocalizedError {
             return "请求失败，请检查服务器地址和网络"
         case .noFolderService:
             return "未找到可用的文件服务"
+        case .unsupportedOperation:
+            return "当前数据源不支持该操作"
         }
     }
 }

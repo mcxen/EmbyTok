@@ -220,6 +220,7 @@ ios-native/EmbyTokNative.xcodeproj
 2. 文件服务 API（`/api/folder/*`，含 `Range/HEAD`，用于 Web 和 iOS 播放）
 
 详细的 NAS/Docker 部署与踩坑处理见 `docs/DOCKER_NAS.md`。
+Mac arm64 拉取 GHCR amd64 镜像导出上传的步骤也在该文档中。
 
 GHCR 自动构建已配置：推送到 `main/master` 或打 `v*` 标签会生成多架构镜像。
 镜像地址示例：`ghcr.io/<owner>/<repo>`。

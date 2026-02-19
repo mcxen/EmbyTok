@@ -81,6 +81,33 @@ sudo systemctl daemon-reload
 sudo systemctl restart docker
 ```
 
+### 2) Mac 是 arm64，但 NAS 需要 amd64（推荐方案）
+
+GHCR 已发布多架构镜像，可直接在本机拉取 amd64 后导出，再上传到 NAS：
+
+```bash
+# 登录（私有仓库需要）
+docker login ghcr.io -u <user> -p <github_pat>
+
+# 拉取 amd64 架构镜像
+docker pull --platform linux/amd64 ghcr.io/<owner>/<repo>:vX.Y.Z
+
+# 导出为 tar
+docker save -o embytok_vX.Y.Z_amd64.tar ghcr.io/<owner>/<repo>:vX.Y.Z
+```
+
+上传到 NAS 后导入并运行：
+
+```bash
+scp embytok_vX.Y.Z_amd64.tar <user>@<nas_ip>:/vol1/1000/DockerSpace/EmbyTok/
+
+ssh <user>@<nas_ip>
+cd /vol1/1000/DockerSpace/EmbyTok
+sudo docker load -i embytok_vX.Y.Z_amd64.tar
+```
+
+接着按“快速路径”的 `docker run` 或 `docker compose` 启动。
+
 ### 2) `exec format error`
 
 这是镜像架构不匹配：

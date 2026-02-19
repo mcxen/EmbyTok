@@ -108,6 +108,10 @@ sudo docker load -i embytok_vX.Y.Z_amd64.tar
 
 接着按“快速路径”的 `docker run` 或 `docker compose` 启动。
 
+直接基于docker app启动
+
+![alt text](../public/imagedocker.png)
+
 ### 2) `exec format error`
 
 这是镜像架构不匹配：
